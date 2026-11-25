@@ -1897,6 +1897,13 @@ async function placeStoreSave(name, dataUrl) {
         db.transaction("places", "readwrite").objectStore("places").put({ name: name, dataUrl: dataUrl });
     } catch (e) {}
 }
+async function placeStoreDelete(name) {
+    try {
+        const db = await placeDbOpen();
+        db.transaction("places", "readwrite").objectStore("places").delete(name);
+    } catch (e) {}
+}
+function isUuidName(n) { return /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-/.test(n || ""); }
 async function placeStoreAll() {
     try {
         const db = await placeDbOpen();
@@ -2130,6 +2137,10 @@ function openPlate() {
             '<button id="plateLoadPlaceBtn" class="px-3 py-2 rounded-xl border-2 border-amber-500 text-amber-600 font-bold text-xs">地名画像を読む</button>' +
             '<input id="platePlaceFile" type="file" accept="image/*" multiple class="hidden">' +
         '</div>' +
+        '<div class="flex gap-2">' +
+            '<button id="plateGridBtn" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs">地名を画像で選ぶ</button>' +
+            '<button id="plateRenameBtn" class="flex-1 py-2 rounded-xl border-2 border-slate-200 font-bold text-slate-500 text-xs">選んだ地名の名前を変更</button>' +
+        '</div>' +
         '<div class="flex items-center gap-2">' +
             '<span class="text-[11px] font-bold text-slate-400">地名の大きさ</span>' +
             '<input id="platePlaceScale" type="range" min="50" max="200" step="5" value="100" class="flex-1">' +
@@ -2185,14 +2196,77 @@ function openPlate() {
         redraw();
     });
     document.getElementById("plateLoadPlaceBtn").addEventListener("click", () => document.getElementById("platePlaceFile").click());
+    document.getElementById("plateGridBtn").addEventListener("click", async () => {
+        const list = await placeStoreAll();
+        if (!list.length) { alert("地名画像がまだ読み込まれていません"); return; }
+        list.sort((a, b) => a.name.localeCompare(b.name, "ja"));
+        const ov = document.createElement("div");
+        ov.className = "fixed inset-0 z-[96] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4";
+        ov.innerHTML = '<div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-4 space-y-3 max-h-[92vh] flex flex-col">' +
+            '<div class="flex items-center justify-between"><h3 class="font-black text-slate-800">地名を画像で選ぶ</h3><button id="plateGridClose" class="text-slate-400 text-2xl leading-none px-2">×</button></div>' +
+            '<div id="plateGridCells" class="grid grid-cols-4 gap-2 overflow-y-auto"></div></div>';
+        document.body.appendChild(ov);
+        const cells = ov.querySelector("#plateGridCells");
+        list.forEach(rec => {
+            const b = document.createElement("button");
+            b.className = "border-2 rounded-xl p-1 bg-white flex flex-col items-center gap-1 " + (rec.name === platePlaceName ? "border-blue-500" : "border-slate-200");
+            const im = document.createElement("img");
+            im.src = rec.dataUrl;
+            im.style.cssText = "height:34px;max-width:100%;object-fit:contain;";
+            const sp = document.createElement("span");
+            sp.className = "text-[9px] font-bold text-slate-500 w-full truncate text-center";
+            sp.textContent = isUuidName(rec.name) ? "（名前なし）" : rec.name;
+            b.appendChild(im); b.appendChild(sp);
+            b.addEventListener("click", () => {
+                platePlaceName = rec.name;
+                const sel = document.getElementById("platePlaceSel");
+                if (sel) { sel.value = rec.name; sel.dispatchEvent(new Event("change")); }
+                ov.remove();
+            });
+            cells.appendChild(b);
+        });
+        ov.querySelector("#plateGridClose").addEventListener("click", () => ov.remove());
+        ov.addEventListener("click", (e) => { if (e.target === ov) ov.remove(); });
+    });
+    document.getElementById("plateRenameBtn").addEventListener("click", async () => {
+        if (!platePlaceName) { alert("まず地名を選んでください"); return; }
+        const list = await placeStoreAll();
+        const rec = list.find(p => p.name === platePlaceName);
+        if (!rec) return;
+        const nn = prompt("この地名の新しい名前（プレビューで字を確認して入力）", isUuidName(rec.name) ? "" : rec.name);
+        if (!nn || !nn.trim() || nn.trim() === rec.name) return;
+        const newName = nn.trim();
+        if (list.some(p => p.name === newName)) { alert("その名前は既にあります"); return; }
+        await placeStoreSave(newName, rec.dataUrl);
+        await placeStoreDelete(rec.name);
+        platePlaceName = newName;
+        await refreshPlaceSelect();
+        const sel = document.getElementById("platePlaceSel");
+        if (sel) { sel.value = newName; sel.dispatchEvent(new Event("change")); }
+    });
     document.getElementById("platePlaceFile").addEventListener("change", async (e) => {
         const files = Array.from(e.target.files || []);
         let lastName = "";
+        const existing = await placeStoreAll();
+        const byData = new Map(existing.map(p => [p.dataUrl, p.name]));
         for (const file of files) {
             const dataUrl = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(file); });
             if (!dataUrl) continue;
             const name = file.name.replace(/\.[^.]+$/, "");
+            const dupName = byData.get(dataUrl);
+            if (dupName) {
+                if (isUuidName(dupName) && !isUuidName(name)) {
+                    await placeStoreSave(name, dataUrl);
+                    await placeStoreDelete(dupName);
+                    byData.set(dataUrl, name);
+                    lastName = name;
+                } else {
+                    lastName = dupName;
+                }
+                continue;
+            }
             await placeStoreSave(name, dataUrl);
+            byData.set(dataUrl, name);
             plateImgCache[name] = null;
             delete plateImgCache[name];
             lastName = name;
