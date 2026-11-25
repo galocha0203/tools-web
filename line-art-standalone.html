@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>線画グラフィック</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="線画メーカー">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f172a">
+    <link id="appleTouchIcon" rel="apple-touch-icon" href="">
+    <link id="appManifest" rel="manifest" href="">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .loader-dots div { animation-timing-function: cubic-bezier(0, 1, 1, 0); }
+        .loader-dots div:nth-child(1) { left: 8px; animation: loader-dots1 0.6s infinite; }
+        .loader-dots div:nth-child(2) { left: 8px; animation: loader-dots2 0.6s infinite; }
+        .loader-dots div:nth-child(3) { left: 32px; animation: loader-dots2 0.6s infinite; }
+        .loader-dots div:nth-child(4) { left: 56px; animation: loader-dots3 0.6s infinite; }
+        @keyframes loader-dots1 { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+        @keyframes loader-dots3 { 0% { transform: scale(1); } 100% { transform: scale(0); } }
+        @keyframes loader-dots2 { 0% { transform: translate(0, 0); } 100% { transform: translate(24px, 0); } }
+    </style>
+</head>
+<body class="text-slate-800 antialiased min-h-screen flex flex-col">
+    <header class="bg-white shadow-sm py-3 sticky top-0 z-20">
+        <div class="max-w-5xl mx-auto px-4 flex justify-between items-center">
+            <h1 class="text-lg md:text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                <span>線画グラフィック</span>
+            </h1>
+            <div class="flex items-center gap-2">
+                <button id="viewAllTopBtn" class="hidden px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition shadow-sm flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    一覧を見る
+                </button>
+                <button id="openGuideBtn" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition shadow-sm flex items-center" title="スマホ・iPadで1クリック起動する方法">
+                    <svg class="w-4 h-4 mr-1 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    <span class="hidden sm:inline">アプリ化・設定</span>
+                    <span class="sm:hidden">設定</span>
+                </button>
+            </div>
+        </div>
+    </header>
+    <main class="flex-grow flex flex-col items-center justify-start p-3 md:p-6 w-full max-w-5xl mx-auto">
+        <div id="errorBox" class="hidden w-full bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4 rounded shadow-sm" role="alert">
+            <p class="font-bold">エラーが発生しました</p>
+            <p id="errorMessage" class="text-sm">詳細なメッセージがここに表示されます。</p>
+        </div>
+        <div id="uploadSection" class="w-full bg-white rounded-2xl shadow-xl p-6 md:p-16 text-center border-2 border-dashed border-slate-300 hover:border-slate-500 transition-colors cursor-pointer relative my-auto">
+            <input type="file" id="fileInput" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+            <div class="pointer-events-none">
+                <svg class="mx-auto h-14 w-14 text-slate-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <h3 class="text-base md:text-lg font-medium text-slate-700">クリックまたはドラッグ＆ドロップで画像をアップロード</h3>
+                <p class="text-slate-500 mt-2 text-xs md:text-sm">PNG, JPG 形式対応</p>
+            </div>
+        </div>
+        <div id="previewSection" class="hidden w-full flex flex-col items-center my-auto">
+            <div class="bg-white p-4 rounded-2xl shadow-lg w-full max-w-sm md:max-w-md mb-6">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-wider">アップロード画像</span>
+                    <button id="cancelBtn" class="text-slate-400 hover:text-red-500 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <img id="imagePreview" class="w-full h-auto max-h-60 object-contain rounded-lg bg-slate-100" src="" alt="プレビュー" />
+            </div>
+            <button id="convertBtn" class="group relative px-8 py-3.5 bg-slate-900 text-white font-bold rounded-full text-base md:text-lg shadow-xl hover:bg-slate-800 hover:shadow-2xl transition-all transform hover:-translate-y-1 overflow-hidden">
+                <span class="relative z-10 flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    線画グラフィックを生成する
+                </span>
+            </button>
+        </div>
+        <div id="loadingSection" class="hidden w-full flex flex-col items-center my-auto py-12">
+            <div class="loader-dots relative w-20 h-5 mb-6">
+                <div class="absolute top-0 mt-1 w-3 h-3 rounded-full bg-slate-800"></div>
+                <div class="absolute top-0 mt-1 w-3 h-3 rounded-full bg-slate-800"></div>
+                <div class="absolute top-0 mt-1 w-3 h-3 rounded-full bg-slate-800"></div>
+                <div class="absolute top-0 mt-1 w-3 h-3 rounded-full bg-slate-800"></div>
+            </div>
+            <p id="loadingText" class="text-slate-600 font-medium text-sm md:text-base mt-2">線画グラフィックを生成中...</p>
+        </div>
+        <div id="resultsSection" class="hidden w-full mt-2 flex flex-col items-center">
+            <div class="bg-white p-3 rounded-xl shadow-sm w-full max-w-xs md:max-w-sm mb-4 border border-slate-200">
+                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block mb-1.5 text-center">元の画像</span>
+                <img id="originalImgDisplay" class="w-full h-32 object-contain rounded bg-slate-50 cursor-pointer hover:opacity-95 transition" src="" alt="元の画像" title="クリックして拡大" />
+            </div>
+            <div id="cardsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 w-full">
+                <div id="card1" class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col border border-slate-200">
+                    <div class="p-2.5 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                        <span class="font-bold text-slate-700 text-xs md:text-sm">デフォルメ</span>
+                    </div>
+                    <div class="p-2 flex-grow flex flex-col items-center justify-center bg-slate-100 h-44 md:h-52 relative">
+                        <div id="resultPlaceholder1" class="hidden animate-pulse flex flex-col items-center">
+                            <svg class="w-6 h-6 text-slate-300 mb-2 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <span class="text-xs text-slate-400">生成中...</span>
+                        </div>
+                        <img id="resultImg1" class="w-full h-full object-contain hidden rounded shadow-sm cursor-pointer hover:opacity-95 transition grayscale" src="" alt="デフォルメ" title="クリックして拡大" />
+                    </div>
+                    <div class="p-2.5 flex flex-col gap-2">
+                        <button id="downloadBtn1" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold rounded-lg transition-colors shadow-sm flex justify-center items-center hidden">
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            ダウンロード
+                        </button>
+                        <button id="generatePattern2Btn" class="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow transition hidden">
+                            リアルを追加生成
+                        </button>
+                    </div>
+                </div>
+                <div id="card2" class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col border border-slate-200 opacity-60">
+                    <div class="p-2.5 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                        <span class="font-bold text-slate-700 text-xs md:text-sm">リアル</span>
+                    </div>
+                    <div class="p-2 flex-grow flex flex-col items-center justify-center bg-slate-100 h-44 md:h-52 relative">
+                        <div id="resultPlaceholder2" class="hidden animate-pulse flex flex-col items-center">
+                            <svg class="w-6 h-6 text-slate-300 mb-2 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <span class="text-xs text-slate-400">生成中...</span>
+                        </div>
+                        <span id="card2Waiting" class="text-xs text-slate-400 text-center px-4">デフォルメ完了後に生成可能になります</span>
+                        <img id="resultImg2" class="w-full h-full object-contain hidden rounded shadow-sm cursor-pointer hover:opacity-95 transition" src="" alt="リアル" title="クリックして拡大" />
+                    </div>
+                    <div class="p-2.5 flex flex-col gap-2">
+                        <button id="downloadBtn2" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold rounded-lg transition-colors shadow-sm flex justify-center items-center hidden">
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            ダウンロード
+                        </button>
+                        <button id="generatePattern3Btn" class="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow transition hidden">
+                            漫画を追加生成
+                        </button>
+                    </div>
+                </div>
+                <div id="card3" class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col border border-slate-200 opacity-60">
+                    <div class="p-2.5 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                        <span class="font-bold text-slate-700 text-xs md:text-sm">漫画</span>
+                    </div>
+                    <div class="p-2 flex-grow flex flex-col items-center justify-center bg-slate-100 h-44 md:h-52 relative">
+                        <div id="resultPlaceholder3" class="hidden animate-pulse flex flex-col items-center">
+                            <svg class="w-6 h-6 text-slate-300 mb-2 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <span class="text-xs text-slate-400">生成中...</span>
+                        </div>
+                        <span id="card3Waiting" class="text-xs text-slate-400 text-center px-4">リアル完了後に生成可能になります</span>
+                        <img id="resultImg3" class="w-full h-full object-contain hidden rounded shadow-sm cursor-pointer hover:opacity-95 transition grayscale" src="" alt="漫画" title="クリックして拡大" />
+                    </div>
+                    <div class="p-2.5 flex flex-col gap-2">
+                        <button id="downloadBtn3" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold rounded-lg transition-colors shadow-sm flex justify-center items-center hidden">
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            ダウンロード
+                        </button>
+                    </div>
+                </div>
+                <div id="card4" class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col border border-slate-200 opacity-60">
+                    <div class="p-2.5 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                        <span class="font-bold text-slate-700 text-xs md:text-sm">線画</span>
+                    </div>
+                    <div class="p-2 flex-grow flex flex-col items-center justify-center bg-slate-100 h-44 md:h-52 relative">
+                        <div id="resultPlaceholder4" class="hidden animate-pulse flex flex-col items-center">
+                            <svg class="w-6 h-6 text-slate-300 mb-2 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <span class="text-xs text-slate-400">生成中...</span>
+                        </div>
+                        <span id="card4Waiting" class="text-xs text-slate-400 text-center px-4">リアル完了後に生成可能になります</span>
+                        <img id="resultImg4" class="w-full h-full object-contain hidden rounded shadow-sm cursor-pointer hover:opacity-95 transition grayscale" src="" alt="線画" title="クリックして拡大" />
+                    </div>
+                    <div class="p-2.5 flex flex-col gap-2">
+                        <button id="downloadBtn4" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold rounded-lg transition-colors shadow-sm flex justify-center items-center hidden">
+                            <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            ダウンロード
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="generateBothContainer" class="w-full max-w-sm mt-4 hidden">
+                <button id="generateBothBtn" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm shadow-xl transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    漫画と線画を生成
+                </button>
+            </div>
+            <div class="flex flex-wrap justify-center gap-3 mt-6 mb-4">
+                <button id="viewAllBtn" class="hidden px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-full text-xs md:text-sm shadow transition flex items-center">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    一覧を見る
+                </button>
+                <button id="resetBtn" class="px-6 py-2 border-2 border-slate-300 text-slate-600 font-semibold rounded-full text-xs md:text-sm hover:bg-slate-50 transition-colors">
+                    別の画像を変換する
+                </button>
+            </div>
+        </div>
+    </main>
+    <div id="zoomModal" class="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-1.5 sm:p-3 hidden opacity-0 transition-opacity duration-300">
+        <div class="relative w-full h-full flex flex-col items-center justify-center">
+            <button id="closeModalBtn" type="button" class="fixed top-2.5 right-2.5 z-50 bg-black/60 hover:bg-black/80 text-white rounded-full p-2 transition shadow-lg border border-white/20">
+                <svg class="w-6 h-6 sm:w-7 sm:h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div id="saveHintBanner" class="hidden mb-2 px-4 py-2 bg-white/95 text-slate-900 rounded-full shadow-lg text-xs md:text-sm font-bold flex items-center gap-2 z-10">
+                <svg class="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>下の画像を<strong>長押し</strong>して「"写真"に保存」または「共有」を選択してください</span>
+            </div>
+            <div id="singleZoomContainer" class="w-full h-full flex items-center justify-center p-2">
+                <img id="zoomedImage" class="max-w-full max-h-[92vh] object-contain rounded-lg bg-white shadow-2xl" src="" alt="拡大画像" />
+            </div>
+            <div id="viewAllContainer" class="hidden w-full h-full flex flex-col items-center justify-center overflow-hidden">
+            </div>
+        </div>
+    </div>
+    <div id="settingsModal" class="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-5 md:p-6 shadow-2xl flex flex-col gap-5 text-slate-800">
+            <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h2 class="text-base md:text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                    アイコン1クリック起動 ＆ 外部利用設定
+                </h2>
+                <button id="closeSettingsBtn" class="text-slate-400 hover:text-slate-600 p-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div class="flex items-center justify-between mb-1.5">
+                    <h3 class="text-xs md:text-sm font-bold text-slate-800">① Geminiアプリ外で使うためのAPIキー設定</h3>
+                    <span id="apiKeyStatusBadge" class="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-slate-200 text-slate-600">未設定</span>
+                </div>
+                <p class="text-xs text-slate-600 mb-3 leading-relaxed">
+                    他のスマホやiPadのホーム画面から直接使う場合、Google AI StudioのAPIキーを1回だけ登録すると端末に保存され、次回から入力不要になります。
+                </p>
+                <div class="flex gap-2">
+                    <input type="password" id="apiKeyInput" placeholder="AIzaSy... から始まるAPIキーを入力" class="flex-grow px-3 py-2 text-xs md:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-800 bg-white" />
+                    <button id="saveApiKeyBtn" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition whitespace-nowrap">
+                        保存
+                    </button>
+                </div>
+                <div class="flex justify-between items-center mt-2">
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="text-[11px] text-blue-600 hover:underline font-medium">
+                        → Google AI StudioでAPIキーを取得する
+                    </a>
+                    <button id="clearApiKeyBtn" class="text-[11px] text-red-500 hover:underline hidden">キーを削除</button>
+                </div>
+            </div>
+            <div class="space-y-3 text-xs md:text-sm">
+                <h3 class="font-bold text-slate-800">② スマホ・iPadのホーム画面にアイコンを作る方法</h3>
+                <div class="p-3.5 rounded-xl bg-blue-50/70 border border-blue-100 space-y-2">
+                    <p class="font-bold text-blue-900">方法A：共有リンクからホーム画面に追加（一番簡単）</p>
+                    <ol class="list-decimal list-inside space-y-1 text-slate-700 text-xs leading-relaxed">
+                        <li>Geminiのプレビュー画面右上にある<strong>「共有（Share）」</strong>ボタンから公開リンクを作成します。</li>
+                        <li>スマホやiPadの<strong>Safari</strong>（またはChrome）でそのリンクを開きます。</li>
+                        <li>ブラウザの共有ボタン（<span class="inline-block font-bold">↑</span>）をタップし、<strong>「ホーム画面に追加」</strong>を選びます。</li>
+                    </ol>
+                </div>
+                <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                    <p class="font-bold text-slate-800">方法B：単体アプリファイル（HTML）として配布・公開する</p>
+                    <p class="text-xs text-slate-600 leading-relaxed">
+                        下のボタンからこのアプリ自体のファイルを保存し、GitHub PagesやNetlify、社内サーバー等に置くと、完全独立したWebアプリとしてどの端末からでも1クリックで使えるようになります。
+                    </p>
+                    <button id="exportHtmlBtn" class="w-full py-2.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 font-bold rounded-lg text-xs shadow-sm transition flex items-center justify-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        アプリ本体（index.html）をダウンロード
+                    </button>
+                </div>
+            </div>
+            <button id="closeSettingsBottomBtn" class="w-full py-2.5 bg-slate-900 text-white font-bold rounded-xl text-xs md:text-sm hover:bg-slate-800 transition">
+                閉じる
+            </button>
+        </div>
+    </div>
+    <script>
+let uploadedBase64Data = null;
+let uploadedMimeType = null;
+let rawDataUrlGlobal = null;
+const apiKey = ""; // Canvas auto-injection
+const STORAGE_KEY_API = "line_art_gemini_api_key_v1";
+
+let memoryApiKey = "";
+
+function sanitizeApiKey(val) {
+    if (!val) return "";
+    const m = String(val).match(/AIza[0-9A-Za-z\-_]+/);
+    if (m) return m[0];
+    return String(val).replace(/[^0-9A-Za-z\-_.]/g, "");
+}
+
+function getStoredApiKey() {
+    if (memoryApiKey) return memoryApiKey;
+    try {
+        const raw = window.localStorage ? (window.localStorage.getItem(STORAGE_KEY_API) || "") : "";
+        const clean = sanitizeApiKey(raw);
+        if (clean) memoryApiKey = clean;
+        return clean;
+    } catch (e) {
+        return "";
+    }
+}
+
+function setStoredApiKey(val) {
+    const clean = sanitizeApiKey(val);
+    memoryApiKey = clean;
+    try {
+        if (window.localStorage) {
+            if (clean) window.localStorage.setItem(STORAGE_KEY_API, clean);
+            else window.localStorage.removeItem(STORAGE_KEY_API);
+        }
+    } catch (e) {}
+}
+
+(function setupPWA() {
+    try {
+        const iconCanvas = document.createElement('canvas');
+        iconCanvas.width = 192;
+        iconCanvas.height = 192;
+        const ctx = iconCanvas.getContext('2d');
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.roundRect(0, 0, 192, 192, 42);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 8;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.arc(96, 78, 28, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(86, 74, 3, 0, Math.PI * 2);
+        ctx.arc(106, 74, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(52, 146);
+        ctx.quadraticCurveTo(96, 112, 140, 146);
+        ctx.stroke();
+
+        const iconDataUrl = iconCanvas.toDataURL('image/png');
+        const appleIcon = document.getElementById('appleTouchIcon');
+        if (appleIcon) appleIcon.href = iconDataUrl;
+
+        const manifestObj = {
+            name: "線画グラフィック",
+            short_name: "線画メーカー",
+            display: "standalone",
+            background_color: "#f8fafc",
+            theme_color: "#0f172a",
+            icons: [{ src: iconDataUrl, sizes: "192x192", type: "image/png" }]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/manifest+json' });
+        const manifestLink = document.getElementById('appManifest');
+        if (manifestLink) manifestLink.href = URL.createObjectURL(manifestBlob);
+    } catch (e) {}
+})();
+
+let currentImgData1 = null;
+let currentImgData2 = null;
+let currentImgData3 = null;
+let currentImgData4 = null;
+
+const fileInput = document.getElementById('fileInput');
+const uploadSection = document.getElementById('uploadSection');
+const previewSection = document.getElementById('previewSection');
+const imagePreview = document.getElementById('imagePreview');
+const originalImgDisplay = document.getElementById('originalImgDisplay');
+const cancelBtn = document.getElementById('cancelBtn');
+const convertBtn = document.getElementById('convertBtn');
+const loadingSection = document.getElementById('loadingSection');
+const loadingText = document.getElementById('loadingText');
+const resultsSection = document.getElementById('resultsSection');
+const errorBox = document.getElementById('errorBox');
+const errorMessage = document.getElementById('errorMessage');
+const resetBtn = document.getElementById('resetBtn');
+
+const resultImg1 = document.getElementById('resultImg1');
+const resultImg2 = document.getElementById('resultImg2');
+const resultImg3 = document.getElementById('resultImg3');
+const resultImg4 = document.getElementById('resultImg4');
+const resultPlaceholder1 = document.getElementById('resultPlaceholder1');
+const resultPlaceholder2 = document.getElementById('resultPlaceholder2');
+const resultPlaceholder3 = document.getElementById('resultPlaceholder3');
+const resultPlaceholder4 = document.getElementById('resultPlaceholder4');
+const downloadBtn1 = document.getElementById('downloadBtn1');
+const downloadBtn2 = document.getElementById('downloadBtn2');
+const downloadBtn3 = document.getElementById('downloadBtn3');
+const downloadBtn4 = document.getElementById('downloadBtn4');
+
+const card1 = document.getElementById('card1');
+const card2 = document.getElementById('card2');
+const card3 = document.getElementById('card3');
+const card4 = document.getElementById('card4');
+const card2Waiting = document.getElementById('card2Waiting');
+const card3Waiting = document.getElementById('card3Waiting');
+const card4Waiting = document.getElementById('card4Waiting');
+const generateBothContainer = document.getElementById('generateBothContainer');
+const generateBothBtn = document.getElementById('generateBothBtn');
+const viewAllBtn = document.getElementById('viewAllBtn');
+const viewAllTopBtn = document.getElementById('viewAllTopBtn');
+
+const zoomModal = document.getElementById('zoomModal');
+const zoomedImage = document.getElementById('zoomedImage');
+const singleZoomContainer = document.getElementById('singleZoomContainer');
+const viewAllContainer = document.getElementById('viewAllContainer');
+const closeModalBtn = document.getElementById('closeModalBtn');
+const saveHintBanner = document.getElementById('saveHintBanner');
+
+const settingsModal = document.getElementById('settingsModal');
+const openGuideBtn = document.getElementById('openGuideBtn');
+const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+const closeSettingsBottomBtn = document.getElementById('closeSettingsBottomBtn');
+const apiKeyInput = document.getElementById('apiKeyInput');
+const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+const clearApiKeyBtn = document.getElementById('clearApiKeyBtn');
+const apiKeyStatusBadge = document.getElementById('apiKeyStatusBadge');
+const exportHtmlBtn = document.getElementById('exportHtmlBtn');
+
+function updateApiKeyUI() {
+    const saved = getStoredApiKey();
+    if (saved) {
+        apiKeyInput.value = saved;
+        apiKeyStatusBadge.textContent = "保存済み";
+        apiKeyStatusBadge.className = "text-[10px] px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-700";
+        clearApiKeyBtn.classList.remove('hidden');
+    } else {
+        apiKeyInput.value = "";
+        apiKeyStatusBadge.textContent = apiKey ? "Gemini環境内" : "未設定";
+        apiKeyStatusBadge.className = "text-[10px] px-2 py-0.5 rounded-full font-semibold bg-slate-200 text-slate-600";
+        clearApiKeyBtn.classList.add('hidden');
+    }
+}
+
+function openSettingsModal() {
+    updateApiKeyUI();
+    settingsModal.classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+    settingsModal.classList.add('hidden');
+}
+
+openGuideBtn.addEventListener('click', openSettingsModal);
+closeSettingsBtn.addEventListener('click', closeSettingsModal);
+closeSettingsBottomBtn.addEventListener('click', closeSettingsModal);
+settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) closeSettingsModal();
+});
+
+saveApiKeyBtn.addEventListener('click', () => {
+    const val = apiKeyInput.value.trim();
+    if (!val) return;
+    setStoredApiKey(val);
+    updateApiKeyUI();
+    hideError();
+});
+
+clearApiKeyBtn.addEventListener('click', () => {
+    setStoredApiKey("");
+    updateApiKeyUI();
+});
+
+exportHtmlBtn.addEventListener('click', () => {
+    const htmlContent = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'line-art-app.html';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }, 1000);
+});
+
+updateApiKeyUI();
+
+function openModal(src, showSaveHint = false) {
+    if (!src) return;
+    if (saveHintBanner) {
+        if (showSaveHint) {
+            saveHintBanner.classList.remove('hidden');
+        } else {
+            saveHintBanner.classList.add('hidden');
+        }
+    }
+    singleZoomContainer.classList.remove('hidden');
+    viewAllContainer.classList.add('hidden');
+    zoomedImage.src = src;
+    zoomModal.classList.remove('hidden');
+    setTimeout(() => zoomModal.classList.remove('opacity-0'), 10);
+}
+
+function renderViewAllLayout() {
+    if (viewAllContainer.classList.contains('hidden')) return;
+    viewAllContainer.innerHTML = '';
+
+    const generatedList = [
+        { src: currentImgData1, label: "デフォルメ" },
+        { src: currentImgData2, label: "リアル" },
+        { src: currentImgData3, label: "漫画" },
+        { src: currentImgData4, label: "線画" }
+    ].filter(item => !!item.src);
+
+    if (generatedList.length === 0) return;
+
+    const testImg = new Image();
+    testImg.onload = () => {
+        const imgW = testImg.naturalWidth || 1000;
+        const imgH = testImg.naturalHeight || 1000;
+
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const isCompactScreen = vw < 640 || vh < 500;
+
+        const origHeightRatio = isCompactScreen ? 0.14 : 0.16;
+        const topAreaH = Math.max(60, Math.min(150, Math.floor(vh * origHeightRatio)));
+        const gap = isCompactScreen ? 6 : 12;
+        const pad = isCompactScreen ? 8 : 16;
+
+        const availW = vw - pad * 2;
+        const availH = vh - topAreaH - pad * 2 - gap;
+
+        const count = generatedList.length;
+
+        let candidates = [];
+        if (count === 1) {
+            candidates = [{ cols: 1, rows: 1 }];
+        } else if (count === 2) {
+            candidates = [
+                { cols: 2, rows: 1 },
+                { cols: 1, rows: 2 }
+            ];
+        } else if (count === 3) {
+            candidates = [
+                { cols: 3, rows: 1 },
+                { cols: 2, rows: 2 },
+                { cols: 1, rows: 3 }
+            ];
+        } else {
+            candidates = [
+                { cols: 4, rows: 1 },
+                { cols: 2, rows: 2 },
+                { cols: 1, rows: 4 }
+            ];
+        }
+
+        let bestConfig = candidates[0];
+        let maxSingleImgArea = -1;
+
+        candidates.forEach(cand => {
+            const cellW = (availW - gap * (cand.cols - 1)) / cand.cols;
+            const cellH = (availH - gap * (cand.rows - 1)) / cand.rows;
+            if (cellW <= 0 || cellH <= 0) return;
+
+            const scale = Math.min(cellW / imgW, cellH / imgH);
+            const drawnW = imgW * scale;
+            const drawnH = imgH * scale;
+            const area = drawnW * drawnH;
+
+            if (area > maxSingleImgArea) {
+                maxSingleImgArea = area;
+                bestConfig = { ...cand, cellW, cellH, drawnW, drawnH };
+            }
+        });
+
+        viewAllContainer.className = "w-full h-full flex flex-col items-center justify-between overflow-hidden select-none";
+        viewAllContainer.style.padding = `${pad}px`;
+        viewAllContainer.style.gap = `${gap}px`;
+
+        if (rawDataUrlGlobal) {
+            const topBar = document.createElement('div');
+            topBar.className = "w-full flex items-center justify-center flex-shrink-0";
+            topBar.style.height = `${topAreaH}px`;
+
+            const origWrapper = document.createElement('div');
+            origWrapper.className = "relative h-full flex items-center justify-center bg-white rounded-lg shadow-md overflow-hidden border border-white/20 cursor-pointer";
+            origWrapper.onclick = (e) => {
+                e.stopPropagation();
+                openModal(rawDataUrlGlobal);
+            };
+
+            const origEl = document.createElement('img');
+            origEl.src = rawDataUrlGlobal;
+            origEl.alt = "元の画像";
+            origEl.style.height = `${topAreaH}px`;
+            origEl.style.maxWidth = `${Math.floor(availW * 0.65)}px`;
+            origEl.className = "h-full w-auto object-contain block";
+
+            const badge = document.createElement('span');
+            badge.textContent = "元画像";
+            badge.className = "absolute bottom-1 left-1 bg-black/65 text-white text-[10px] px-1.5 py-0.5 rounded font-medium pointer-events-none";
+
+            origWrapper.appendChild(origEl);
+            origWrapper.appendChild(badge);
+            topBar.appendChild(origWrapper);
+            viewAllContainer.appendChild(topBar);
+        }
+
+        const gridEl = document.createElement('div');
+        gridEl.className = "w-full flex-grow grid items-center justify-items-center overflow-hidden";
+        gridEl.style.gridTemplateColumns = `repeat(${bestConfig.cols}, minmax(0, 1fr))`;
+        gridEl.style.gridTemplateRows = `repeat(${bestConfig.rows}, minmax(0, 1fr))`;
+        gridEl.style.gap = `${gap}px`;
+        gridEl.style.height = `${availH}px`;
+
+        generatedList.forEach((item, index) => {
+            const cell = document.createElement('div');
+            cell.className = "w-full h-full flex items-center justify-center overflow-hidden relative";
+
+            if (count === 3 && bestConfig.cols === 2 && bestConfig.rows === 2 && index === 2) {
+                cell.style.gridColumn = "span 2 / span 2";
+            }
+
+            const imgWrap = document.createElement('div');
+            imgWrap.className = "relative flex items-center justify-center w-full h-full";
+
+            const img = document.createElement('img');
+            img.src = item.src;
+            img.alt = item.label;
+            img.className = "max-w-full max-h-full w-auto h-auto object-contain rounded-lg bg-white shadow-2xl cursor-pointer transition-transform active:scale-95";
+            img.style.maxHeight = `${Math.floor(bestConfig.cellH)}px`;
+            img.style.maxWidth = `${Math.floor(bestConfig.cellW)}px`;
+            img.onclick = (e) => {
+                e.stopPropagation();
+                openModal(item.src);
+            };
+
+            const labelBadge = document.createElement('span');
+            labelBadge.textContent = item.label;
+            labelBadge.className = "absolute bottom-1.5 left-1.5 bg-slate-900/75 text-white text-[10px] sm:text-xs px-2 py-0.5 rounded-md font-semibold backdrop-blur-sm pointer-events-none shadow";
+
+            imgWrap.appendChild(img);
+            imgWrap.appendChild(labelBadge);
+            cell.appendChild(imgWrap);
+            gridEl.appendChild(cell);
+        });
+
+        viewAllContainer.appendChild(gridEl);
+    };
+    testImg.src = currentImgData1 || rawDataUrlGlobal;
+}
+
+function openViewAllModal() {
+    if (!currentImgData1 && !currentImgData2) return;
+    if (saveHintBanner) saveHintBanner.classList.add('hidden');
+    singleZoomContainer.classList.add('hidden');
+    viewAllContainer.classList.remove('hidden');
+
+    renderViewAllLayout();
+
+    zoomModal.classList.remove('hidden');
+    setTimeout(() => zoomModal.classList.remove('opacity-0'), 10);
+}
+
+window.addEventListener('resize', () => {
+    if (!zoomModal.classList.contains('hidden') && !viewAllContainer.classList.contains('hidden')) {
+        renderViewAllLayout();
+    }
+});
+
+function closeModal() {
+    zoomModal.classList.add('opacity-0');
+    setTimeout(() => zoomModal.classList.add('hidden'), 300);
+}
+
+originalImgDisplay.addEventListener('click', () => openModal(rawDataUrlGlobal));
+resultImg1.addEventListener('click', () => openModal(currentImgData1));
+resultImg2.addEventListener('click', () => openModal(currentImgData2));
+resultImg3.addEventListener('click', () => openModal(currentImgData3));
+resultImg4.addEventListener('click', () => openModal(currentImgData4));
+closeModalBtn.addEventListener('click', closeModal);
+zoomModal.addEventListener('click', (e) => {
+    if (e.target === zoomModal) closeModal();
+});
+
+viewAllBtn.addEventListener('click', openViewAllModal);
+viewAllTopBtn.addEventListener('click', openViewAllModal);
+
+function resizeImage(file, maxSize = 1536) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+                if (width > maxSize || height > maxSize) {
+                    if (width > height) {
+                        height = Math.round((height * maxSize) / width);
+                        width = maxSize;
+                    } else {
+                        width = Math.round((width * maxSize) / height);
+                        height = maxSize;
+                    }
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                const dataUrl = canvas.toDataURL(file.type || 'image/jpeg', 0.9);
+                const base64Data = dataUrl.split(',')[1];
+                resolve({ base64Data, mimeType: file.type || 'image/jpeg', dataUrl });
+            };
+            img.onerror = () => reject(new Error("画像の読み込みに失敗しました。"));
+            img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error("ファイルの読み込みに失敗しました。"));
+        reader.readAsDataURL(file);
+    });
+}
+
+function handleFileSelect(file) {
+    if (!file || !file.type.startsWith('image/')) {
+        showError("有効な画像ファイルを選択してください。");
+        return;
+    }
+    hideError();
+
+    resizeImage(file).then(result => {
+        uploadedBase64Data = result.base64Data;
+        uploadedMimeType = result.mimeType;
+        rawDataUrlGlobal = result.dataUrl;
+        imagePreview.src = result.dataUrl;
+        originalImgDisplay.src = result.dataUrl;
+
+        uploadSection.classList.add('hidden');
+        previewSection.classList.remove('hidden');
+        previewSection.classList.add('flex');
+    }).catch(err => {
+        showError(err.message);
+    });
+}
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        handleFileSelect(e.target.files[0]);
+    }
+});
+
+uploadSection.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadSection.classList.add('border-slate-800', 'bg-slate-50');
+});
+
+uploadSection.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    uploadSection.classList.remove('border-slate-800', 'bg-slate-50');
+});
+
+uploadSection.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadSection.classList.remove('border-slate-800', 'bg-slate-50');
+    if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileSelect(e.dataTransfer.files[0]);
+    }
+});
+
+cancelBtn.addEventListener('click', () => {
+    fileInput.value = '';
+    uploadedBase64Data = null;
+    uploadedMimeType = null;
+    rawDataUrlGlobal = null;
+    previewSection.classList.add('hidden');
+    previewSection.classList.remove('flex');
+    uploadSection.classList.remove('hidden');
+});
+
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+function trimWhiteBackground(dataUrl) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            let minX = canvas.width, minY = canvas.height, maxX = 0, maxY = 0;
+            let found = false;
+            const threshold = 245;
+
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const index = (y * canvas.width + x) * 4;
+                    const r = data[index];
+                    const g = data[index + 1];
+                    const b = data[index + 2];
+                    const a = data[index + 3];
+
+                    if (a > 0 && (r < threshold || g < threshold || b < threshold)) {
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                        found = true;
+                    }
+                }
+            }
+
+            if (!found) {
+                resolve(dataUrl);
+                return;
+            }
+
+            const padding = 20;
+            minX = Math.max(0, minX - padding);
+            minY = Math.max(0, minY - padding);
+            maxX = Math.min(canvas.width, maxX + padding);
+            maxY = Math.min(canvas.height, maxY + padding);
+
+            const cropWidth = maxX - minX;
+            const cropHeight = maxY - minY;
+
+            const croppedCanvas = document.createElement('canvas');
+            croppedCanvas.width = cropWidth;
+            croppedCanvas.height = cropHeight;
+            const croppedCtx = croppedCanvas.getContext('2d');
+
+            croppedCtx.drawImage(canvas, minX, minY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+            resolve(croppedCanvas.toDataURL('image/png'));
+        };
+        img.src = dataUrl;
+    });
+}
+
+async function generateWithGemini(base64Data, mimeType, variationPrompt) {
+    const activeKey = getStoredApiKey() || apiKey;
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent?key=${activeKey}`;
+
+    const coreRule = `
+CRITICAL COMPOSITION & EDITING RULES:
+1. Preserve Occupied Chairs, Held Objects & Key Details: Completely PRESERVE any chairs that subjects are actively sitting on, objects/tools being held or interacted with, and critical details of subjects (such as mirrors, grilles, and wheels on vehicles, or facial features).
+2. Remove Empty Chairs & Unrelated Background/Scenery: Completely REMOVE any unoccupied chairs, furniture, floors, walls, and all background clutter, scenery, or items that are NOT being sat on or interacted with. The outer background must be solid pure white (#FFFFFF).
+3. Remove All Text: Completely erase and remove all text, writing, numbers, signs, license plates, labels, or brand logos present anywhere in the image.
+`;
+    const fullPrompt = `${coreRule}\n\n${variationPrompt}`;
+
+    const payload = {
+        contents: [{
+            role: "user",
+            parts: [
+                { text: fullPrompt },
+                {
+                    inlineData: {
+                        mimeType: mimeType,
+                        data: base64Data
+                    }
+                }
+            ]
+        }],
+        generationConfig: {
+            responseModalities: ['IMAGE']
+        }
+    };
+
+    let maxRetries = 3;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                if (response.status === 429) {
+                    await delay(Math.pow(2, i + 1) * 1000);
+                    continue;
+                }
+                if (response.status === 400 || response.status === 403) {
+                    throw new Error(`APIキーが無効か設定されていません。右上の「アプリ化・設定」ボタンからGoogle AI StudioのAPIキーを登録してください。(Status: ${response.status})`);
+                }
+                throw new Error(`API Error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            const part = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+
+            if (part && part.inlineData && part.inlineData.data) {
+                const rawDataUrl = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+                const trimmedDataUrl = await trimWhiteBackground(rawDataUrl);
+                return trimmedDataUrl;
+            } else {
+                throw new Error("APIからのレスポンスに画像データが含まれていませんでした。");
+            }
+        } catch (error) {
+            if (i === maxRetries - 1) throw error;
+            await delay(Math.pow(2, i) * 1000);
+        }
+    }
+}
+
+function showError(msg) {
+    errorMessage.textContent = msg;
+    errorBox.classList.remove('hidden');
+    window.scrollTo(0, 0);
+}
+function hideError() {
+    errorBox.classList.add('hidden');
+}
+
+function dataUrlToBlob(dataUrl) {
+    const parts = dataUrl.split(',');
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mime = mimeMatch ? mimeMatch[1] : 'image/png';
+    const bstr = atob(parts[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+}
+
+async function triggerDownload(e, dataUrl, filename) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    if (!dataUrl) return;
+
+    const isTouchApple = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    try {
+        const blob = dataUrlToBlob(dataUrl);
+        const file = new File([blob], filename, { type: 'image/png' });
+
+        if (isTouchApple) {
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: filename
+                    });
+                    return;
+                } catch (shareErr) {
+                    if (shareErr.name === 'AbortError') {
+                        return;
+                    }
+                    openModal(dataUrl, true);
+                    return;
+                }
+            } else {
+                openModal(dataUrl, true);
+                return;
+            }
+        }
+
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+        }, 1000);
+    } catch (err) {
+        console.error("Download fallback triggered:", err);
+        openModal(dataUrl, true);
+    }
+}
+
+downloadBtn1.addEventListener('click', (e) => triggerDownload(e, currentImgData1, 'line_art_pattern1.png'));
+downloadBtn2.addEventListener('click', (e) => triggerDownload(e, currentImgData2, 'line_art_pattern2.png'));
+downloadBtn3.addEventListener('click', (e) => triggerDownload(e, currentImgData3, 'line_art_pattern3.png'));
+downloadBtn4.addEventListener('click', (e) => triggerDownload(e, currentImgData4, 'line_art_pattern4.png'));
+
+const variation1 = `Create Output Pattern 1:
+- Style: Minimalist flat illustration line art with thick, solid, bold outlines (太めのしっかりとした輪郭線・アウトライン).
+- Color & Tone: Monochrome or black-and-white two-tone color scheme, with chic gray shading and hatching (斜め線・ハッチング) or grid patterns on clothing/items to avoid flatness. Absolutely NO color.
+- Facial Features: Minimalist facial parts with simple dots and lines, friendly expression.
+- General: Maintain exact pose, composition, and clothing details (hairstyles, glasses, fashion items, chairs). Remove all background scenery, empty chairs, and all text.`;
+
+const variation2 = `Create Output Pattern 2:
+- Style: Monochrome manga illustration, black and white comic book art style, clean line art with very thick, bold, and crisp outlines (白黒の漫画風イラスト、コミックアートスタイル、アウトラインはかなり太くくっきりさせて).
+- Shading & Tone: High contrast, minimalist pure white background. Completely monochrome in grayscale (完全に白黒・グレースケール). For dark elements, hair, fur, or subjects, do NOT use pure black; instead, use soft gray shades and tones so that when laser engraved it does not burn too dark (黒い色は使わずグレーの濃淡で代用し、レーザー彫刻で真っ黒にならないように薄めに仕上げる). For human subjects, prioritize realism in features while keeping shading as soft gray tones. Absolutely NO color.
+- General: Maintain the exact pose and composition of the reference image. Remove all text, empty chairs, background scenery, and unrelated items. Preserve occupied chairs and held items.`;
+
+const variation3 = `Create Output Pattern 3:
+- Style: Convert into the distinctive art style of manga artist Man Gataro (漫画家・漫☆画太郎の画風). Bold, dynamic, exaggerated gag-manga facial expressions and features characteristic of Man Gataro, rendered with fewer lines (線は少なめ) so it remains clean and uncluttered.
+- Color & Fill: Strictly black and white monochrome line art (白黒). NO color, and avoid heavy solid black fills.
+- Background & Text: Completely remove all background elements, replacing with a pure solid white background (#FFFFFF) (背景は完全に消して純白にする). Absolutely NO text, sound effects, or letters.
+- Subject: Maintain the pose, composition, and key items of the subject from the reference image, cropped tightly around the subject.`;
+
+const variation4 = `Create Output Pattern 4 (Laser Engraving Portrait):
+# Laser Engraving Portrait
+Generate a monochrome line art illustration optimized for laser engraving (e.g., on leather using LaserPecker).
+- Face & Likeness Priority: Accurately capture facial features, expression, proportions, contours, and hairstyle from the original photo without deforming or over-simplifying.
+- Laser Engraving Line Specifications:
+  * Pure white background: Absolutely no background gradients, textures, or clutter.
+  * Black lines only (monochrome): Drawn purely with black lines.
+  * STRICTLY NO SOLID BLACK FILLS (ベタ塗り禁止): Avoid any large solid black areas or solid fill blocks because they cause leather to burn. Even dark hair and dark clothing MUST NOT be solid-filled; instead, represent them using clean outlines and fine hatching (parallel lines).
+  * Shading & Density: Express light, shadow, and tone using line weight variations (線画の太さ・強弱) and hatching density (ハッチングの密度) rather than gray blur or solid fills.
+- General: Remove all background scenery and text, keeping the subject crisp and clear.`;
+
+convertBtn.addEventListener('click', async () => {
+    if (!uploadedBase64Data) return;
+    hideError();
+
+    previewSection.classList.add('hidden');
+    previewSection.classList.remove('flex');
+    loadingSection.classList.remove('hidden');
+    loadingSection.classList.add('flex');
+    loadingText.textContent = "デフォルメとリアルを生成中...";
+    resultsSection.classList.add('hidden');
+
+    card1.classList.remove('opacity-60');
+    resultImg1.classList.add('hidden');
+    resultPlaceholder1.classList.remove('hidden');
+    downloadBtn1.classList.add('hidden');
+
+    card2.classList.remove('opacity-60');
+    resultImg2.classList.add('hidden');
+    resultPlaceholder2.classList.add('hidden');
+    card2Waiting.classList.add('hidden');
+    downloadBtn2.classList.add('hidden');
+
+    card3.classList.add('opacity-60');
+    resultImg3.classList.add('hidden');
+    resultPlaceholder3.classList.add('hidden');
+    card3Waiting.classList.remove('hidden');
+    card3Waiting.textContent = "リアル完了後に生成可能になります";
+    downloadBtn3.classList.add('hidden');
+
+    card4.classList.add('opacity-60');
+    resultImg4.classList.add('hidden');
+    resultPlaceholder4.classList.add('hidden');
+    card4Waiting.classList.remove('hidden');
+    card4Waiting.textContent = "リアル完了後に生成可能になります";
+    downloadBtn4.classList.add('hidden');
+
+    generateBothContainer.classList.add('hidden');
+    viewAllBtn.classList.add('hidden');
+    viewAllTopBtn.classList.add('hidden');
+
+    try {
+        const [imgData1, imgData2] = await Promise.all([
+            generateWithGemini(uploadedBase64Data, uploadedMimeType, variation1),
+            generateWithGemini(uploadedBase64Data, uploadedMimeType, variation2)
+        ]);
+
+        currentImgData1 = imgData1;
+        resultImg1.src = currentImgData1;
+        resultPlaceholder1.classList.add('hidden');
+        resultImg1.classList.remove('hidden');
+        downloadBtn1.classList.remove('hidden');
+
+        currentImgData2 = imgData2;
+        resultImg2.src = currentImgData2;
+        resultPlaceholder2.classList.add('hidden');
+        resultImg2.classList.remove('hidden');
+        downloadBtn2.classList.remove('hidden');
+
+        generateBothContainer.classList.remove('hidden');
+        card3Waiting.classList.add('hidden');
+        card4Waiting.classList.add('hidden');
+
+        viewAllBtn.classList.remove('hidden');
+        viewAllTopBtn.classList.remove('hidden');
+
+        loadingSection.classList.add('hidden');
+        loadingSection.classList.remove('flex');
+        resultsSection.classList.remove('hidden');
+        resultsSection.classList.add('flex');
+
+    } catch (error) {
+        console.error(error);
+        showError("画像変換中にエラーが発生しました。(" + error.message + ")");
+        loadingSection.classList.add('hidden');
+        loadingSection.classList.remove('flex');
+        previewSection.classList.remove('hidden');
+        previewSection.classList.add('flex');
+    }
+});
+
+generateBothBtn.addEventListener('click', async () => {
+    if (!uploadedBase64Data) return;
+    hideError();
+
+    generateBothContainer.classList.add('hidden');
+
+    card3.classList.remove('opacity-60');
+    resultPlaceholder3.classList.remove('hidden');
+
+    card4.classList.remove('opacity-60');
+    resultPlaceholder4.classList.remove('hidden');
+
+    try {
+        const [imgData3, imgData4] = await Promise.all([
+            generateWithGemini(uploadedBase64Data, uploadedMimeType, variation3),
+            generateWithGemini(uploadedBase64Data, uploadedMimeType, variation4)
+        ]);
+
+        currentImgData3 = imgData3;
+        resultImg3.src = currentImgData3;
+        resultPlaceholder3.classList.add('hidden');
+        resultImg3.classList.remove('hidden');
+        downloadBtn3.classList.remove('hidden');
+
+        currentImgData4 = imgData4;
+        resultImg4.src = currentImgData4;
+        resultPlaceholder4.classList.add('hidden');
+        resultImg4.classList.remove('hidden');
+        downloadBtn4.classList.remove('hidden');
+
+    } catch (error) {
+        console.error(error);
+        showError("漫画・線画の生成中にエラーが発生しました。(" + error.message + ")");
+        resultPlaceholder3.classList.add('hidden');
+        resultPlaceholder4.classList.add('hidden');
+        generateBothContainer.classList.remove('hidden');
+    }
+});
+
+resetBtn.addEventListener('click', () => {
+    fileInput.value = '';
+    uploadedBase64Data = null;
+    uploadedMimeType = null;
+    rawDataUrlGlobal = null;
+    currentImgData1 = null;
+    currentImgData2 = null;
+    currentImgData3 = null;
+    currentImgData4 = null;
+
+    resultsSection.classList.add('hidden');
+    resultsSection.classList.remove('flex');
+    uploadSection.classList.remove('hidden');
+    viewAllBtn.classList.add('hidden');
+    viewAllTopBtn.classList.add('hidden');
+    hideError();
+    window.scrollTo(0, 0);
+});
+
+</script>
+</body>
+</html>
