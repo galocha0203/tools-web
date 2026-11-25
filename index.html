@@ -1824,7 +1824,24 @@ function openBackText() {
     });
     const pc = document.getElementById("backCanvas");
     let dragging = false, lastX = 0, lastY = 0;
-    pc.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; pc.setPointerCapture(e.pointerId); });
+    pc.addEventListener("pointerdown", (e) => {
+        // プレビューの文字をタッチしたら、その行を選択する
+        const rect0 = pc.getBoundingClientRect();
+        const px0 = (e.clientX - rect0.left) * (pc.width / rect0.width);
+        const py0 = (e.clientY - rect0.top) * (pc.height / rect0.height);
+        const inner0 = backInnerRect();
+        const ctx0 = pc.getContext("2d");
+        const items0 = backLayout(ctx0, inner0.w, inner0.h);
+        for (let k = items0.length - 1; k >= 0; k--) {
+            const it = items0[k];
+            ctx0.font = it.px + 'px "' + it.font + '", serif';
+            const tw = ctx0.measureText(it.text).width;
+            const cxp = inner0.x + inner0.w / 2 + it.dx;
+            const cyp = inner0.y + it.cy + it.dy;
+            if (Math.abs(px0 - cxp) <= tw / 2 + 26 && Math.abs(py0 - cyp) <= it.px * 0.78 + 18) { setActive(it.idx); break; }
+        }
+        dragging = true; lastX = e.clientX; lastY = e.clientY; pc.setPointerCapture(e.pointerId);
+    });
     pc.addEventListener("pointermove", (e) => {
         if (!dragging) return;
         const rect = pc.getBoundingClientRect();
@@ -1936,36 +1953,42 @@ function drawPlate(forSave) {
     ctx.fillStyle = "#000000";
     ctx.textBaseline = "middle";
     const stack = plateFontStack(plateState.numFont, plateState.alphaFont);
-    // 地名画像（上段左）
-    const topY = 205;
-    let x = 70;
-    if (platePlaceImg) {
-        const ph = 150 * (plateState.placeScale / 100);
-        const pw = ph * (platePlaceImg.naturalWidth / platePlaceImg.naturalHeight);
-        ctx.drawImage(platePlaceImg, x, topY - ph / 2, pw, ph);
-        x += pw + 36;
-    }
-    // 分類番号（上段、地名の右）
+    // 上段：地名＋分類番号（実物プレートと同じ大きさ・配置で、ひとかたまりを中央に）
+    const topPx = 235 * (plateState.placeScale / 100);
+    const topY = 195;
+    let clsW = 0;
     if (plateState.cls.trim() !== "") {
-        ctx.font = '150px ' + stack;
-        ctx.textAlign = "left";
-        ctx.fillText(plateState.cls.trim(), x, topY + 8);
+        ctx.font = topPx + 'px ' + stack;
+        clsW = ctx.measureText(plateState.cls.trim()).width;
     }
-    // ひらがな（下段左）
-    const botY = 520;
+    let imgW = 0;
+    if (platePlaceImg) imgW = topPx * (platePlaceImg.naturalWidth / platePlaceImg.naturalHeight);
+    const gapTop = (imgW > 0 && clsW > 0) ? 34 : 0;
+    let x = Math.max(50, (W - (imgW + gapTop + clsW)) / 2);
+    if (platePlaceImg) {
+        ctx.drawImage(platePlaceImg, x, topY - topPx / 2, imgW, topPx);
+        x += imgW + gapTop;
+    }
+    if (clsW > 0) {
+        ctx.font = topPx + 'px ' + stack;
+        ctx.textAlign = "left";
+        ctx.fillText(plateState.cls.trim(), x, topY + topPx * 0.04);
+    }
+    // ひらがな（下段左・小さめ）
+    const botY = 545;
     if (plateState.hira.trim() !== "") {
-        ctx.font = '170px ' + plateFontStack(plateState.hiraFont, plateState.alphaFont);
+        ctx.font = '200px ' + plateFontStack(plateState.hiraFont, plateState.alphaFont);
         ctx.textAlign = "left";
-        ctx.fillText(plateState.hira.trim(), 110, botY + 10);
+        ctx.fillText(plateState.hira.trim(), 95, botY);
     }
-    // 一連番号（下段右、等間隔セル描画）
+    // 一連番号（下段右、等間隔セル描画・実物の比率で大きく）
     const numStr = formatPlateNumber(plateState.num);
     if (numStr !== "") {
-        const px = 300 * (plateState.numScale / 100);
+        const px = 440 * (plateState.numScale / 100);
         ctx.font = px + 'px ' + stack;
-        const cells = Array.from(numStr).map(ch => ({ ch: ch, w: (ch === "-") ? px * 0.36 : px * 0.62 }));
+        const cells = Array.from(numStr).map(ch => ({ ch: ch, w: (ch === "-") ? px * 0.34 : px * 0.58 }));
         const totalW = cells.reduce((a, c) => a + c.w, 0);
-        let cxp = W - 70 - totalW;
+        let cxp = W - 45 - totalW;
         ctx.textAlign = "center";
         cells.forEach(c => {
             ctx.fillText(c.ch, cxp + c.w / 2, botY + px * 0.04);
