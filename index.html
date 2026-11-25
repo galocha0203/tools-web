@@ -1970,6 +1970,36 @@ function plateCharFont(ch, px) {
     return px + 'px ' + (lf ? '"' + lf + '", ' : '') + 'sans-serif';
 }
 
+const glyphProbeCache = {};
+function probeGlyph(fontStr, ch) {
+    const key = fontStr + "|" + ch;
+    if (glyphProbeCache[key]) return glyphProbeCache[key];
+    const S = 200;
+    const c = document.createElement("canvas");
+    c.width = 320; c.height = 320;
+    const cx = c.getContext("2d");
+    cx.font = fontStr;
+    cx.textAlign = "left";
+    cx.textBaseline = "alphabetic";
+    cx.fillStyle = "#000000";
+    cx.fillText(ch, 20, 220);
+    let top = -1, bottom = -1;
+    try {
+        const d = cx.getImageData(0, 0, 320, 320).data;
+        for (let y = 0; y < 320; y++) {
+            for (let xx = 0; xx < 320; xx++) {
+                if (d[(y * 320 + xx) * 4 + 3] > 40) {
+                    if (top < 0) top = y;
+                    bottom = y;
+                }
+            }
+        }
+    } catch (e) {}
+    const res = (top < 0) ? { inkH: S * 0.72, above: S * 0.72 } : { inkH: bottom - top + 1, above: 220 - top };
+    glyphProbeCache[key] = res;
+    return res;
+}
+
 function drawPlate(forSave) {
     const pc = document.getElementById("plateCanvas");
     if (!pc) return;
@@ -1990,24 +2020,15 @@ function drawPlate(forSave) {
     ctx.textBaseline = "middle";
     const stack = plateFontStack(plateState.numFont, plateState.alphaFont);
     // 上段：地名＋分類番号（地名のインク・数字・英字すべての実寸高さをそろえる）
-    const topPx = 235 * (plateState.placeScale / 100);
     const topY = 195;
     const cls = plateState.cls.trim();
-    ctx.font = '200px ' + stack;
-    let rDigit = 0.72;
-    const mD = ctx.measureText("0");
-    if (mD.actualBoundingBoxAscent) { const rr = (mD.actualBoundingBoxAscent + (mD.actualBoundingBoxDescent || 0)) / 200; if (rr > 0.2) rDigit = rr; }
-    const G = topPx * rDigit;
+    const G = 200 * (plateState.placeScale / 100); // 上段の字の実寸高さ
     const charSpec = (ch) => {
-        ctx.font = plateCharFont(ch, 200);
-        const m = ctx.measureText(ch);
-        let r = 0.72, asc = 144;
-        if (m.actualBoundingBoxAscent) {
-            const rr = (m.actualBoundingBoxAscent + (m.actualBoundingBoxDescent || 0)) / 200;
-            if (rr > 0.15) { r = rr; asc = m.actualBoundingBoxAscent; }
-        }
-        const px = G / r;
-        return { px: px, w: m.width * (px / 200), asc: asc * (px / 200) };
+        const p = probeGlyph(plateCharFont(ch, 200), ch);
+        const scale = G / p.inkH;
+        const px = 200 * scale;
+        ctx.font = plateCharFont(ch, px);
+        return { px: px, w: ctx.measureText(ch).width, above: p.above * scale };
     };
     let clsW = 0;
     const specs = Array.from(cls).map(ch => { const s = charSpec(ch); clsW += s.w; return s; });
@@ -2036,22 +2057,18 @@ function drawPlate(forSave) {
         Array.from(cls).forEach((ch, i) => {
             const s = specs[i];
             ctx.font = plateCharFont(ch, s.px);
-            ctx.fillText(ch, cxp, topY - G / 2 + s.asc);
+            ctx.fillText(ch, cxp, topY - G / 2 + s.above);
             cxp += s.w;
         });
         ctx.textBaseline = "middle";
     }
-    // ひらがな（下段左・実物比率で字の高さ＝プレートの25%）
+    // ひらがな（下段左・実物比率で字の実寸＝プレートの25%）
     const botY = 545;
     if (plateState.hira.trim() !== "") {
         const hiraStack = plateFontStack(plateState.hiraFont, (plateState.alphaFont && plateState.alphaFont !== plateState.numFont) ? plateState.alphaFont : "");
-        let hpx = 250;
-        ctx.font = '200px ' + hiraStack;
-        const mh = ctx.measureText("あ");
-        if (mh.actualBoundingBoxAscent) {
-            const rr = (mh.actualBoundingBoxAscent + (mh.actualBoundingBoxDescent || 0)) / 200;
-            if (rr > 0.2) hpx = (0.25 * H) / rr;
-        }
+        const ch0 = Array.from(plateState.hira.trim())[0];
+        const ph = probeGlyph('200px ' + hiraStack, ch0);
+        const hpx = 200 * ((0.25 * H) / ph.inkH);
         ctx.font = hpx + 'px ' + hiraStack;
         ctx.textAlign = "left";
         ctx.fillText(plateState.hira.trim(), 95, botY);
@@ -2059,14 +2076,8 @@ function drawPlate(forSave) {
     // 一連番号（下段右・固定サイズ：数字の字の高さ＝プレート高さの50%、等間隔セル）
     const numStr = formatPlateNumber(plateState.num);
     if (numStr !== "") {
-        ctx.font = '200px ' + stack;
-        const m0 = ctx.measureText("0");
-        let r = 0.72;
-        if (m0.actualBoundingBoxAscent) {
-            const rr = (m0.actualBoundingBoxAscent + (m0.actualBoundingBoxDescent || 0)) / 200;
-            if (rr > 0.2) r = rr;
-        }
-        const px = (0.50 * H) / r;
+        const p0 = probeGlyph(plateCharFont("0", 200), "0");
+        const px = 200 * ((0.50 * H) / p0.inkH);
         const cells = Array.from(numStr).map(ch => ({ ch: ch, w: (ch === "-") ? px * 0.34 : px * 0.58 }));
         const totalW = cells.reduce((a, c) => a + c.w, 0);
         let cxp = W - 45 - totalW;
