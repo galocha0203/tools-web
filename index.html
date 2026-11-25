@@ -1284,12 +1284,20 @@ function openRotateTool(srcDataUrl, filename, applyMode) {
 let mockImg = null;
 let mockScale = 1, mockDX = 0, mockDY = 0, mockAngle = 0;
 let mockLabel = "";
-const MOCK_W = 640, MOCK_H = 1200, MOCK_INSET = 46;
-
+let mockLandscape = false;
+const MOCK_W = 640, MOCK_H = 1200;
+// 実物写真からトレースした、少しズレた四角形（本体・ステッチ枠）
 const MOCK_BODY = [[26, 8], [598, 24], [628, 1178], [10, 1154]];
 const MOCK_STITCH = [[74, 56], [556, 74], [584, 1128], [58, 1104]];
 const MOCK_RADII = [22, 16, 26, 18];
 
+function mockPts(pts) {
+    if (!mockLandscape) return pts;
+    return pts.map(([x, y]) => [y, MOCK_W - x]); // 90°反時計回り＝タブが左に来る横向き
+}
+function mockDims() {
+    return mockLandscape ? { w: MOCK_H, h: MOCK_W } : { w: MOCK_W, h: MOCK_H };
+}
 function mockTracePath(ctx, pts, radii) {
     const n = pts.length;
     ctx.beginPath();
@@ -1307,23 +1315,29 @@ function mockTracePath(ctx, pts, radii) {
     }
     ctx.closePath();
 }
-
 function mockInnerRect() {
-    return { x: 74, y: 56, w: 584 - 74, h: 1128 - 56 };
+    const pts = mockPts(MOCK_STITCH);
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const y0 = Math.min(...ys), y1 = Math.max(...ys);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
 }
 
 function drawKeyholderMock() {
     const pc = document.getElementById("mockCanvas");
     if (!pc || !mockImg) return;
-    pc.width = MOCK_W; pc.height = MOCK_H;
+    const dims = mockDims();
+    pc.width = dims.w; pc.height = dims.h;
     const ctx = pc.getContext("2d");
-    // 革本体（実物トレースの少しズレた四角形）
-    const grad = ctx.createLinearGradient(0, 0, MOCK_W, MOCK_H);
+    const body = mockPts(MOCK_BODY);
+    const stitch = mockPts(MOCK_STITCH);
+    // 革本体
+    const grad = ctx.createLinearGradient(0, 0, dims.w, dims.h);
     grad.addColorStop(0, "#e3cdaa");
     grad.addColorStop(0.5, "#dbc39e");
     grad.addColorStop(1, "#d3ba92");
     ctx.fillStyle = grad;
-    mockTracePath(ctx, MOCK_BODY, MOCK_RADII);
+    mockTracePath(ctx, body, MOCK_RADII);
     ctx.fill();
     ctx.strokeStyle = "#b99b6e";
     ctx.lineWidth = 4;
@@ -1331,7 +1345,7 @@ function drawKeyholderMock() {
     const inner = mockInnerRect();
     // 彫刻（ステッチ枠の形にクリップ、multiplyで革に焼いた質感）
     ctx.save();
-    mockTracePath(ctx, MOCK_STITCH, MOCK_RADII);
+    mockTracePath(ctx, stitch, MOCK_RADII);
     ctx.clip();
     const fit = Math.min(inner.w / mockImg.naturalWidth, inner.h / mockImg.naturalHeight);
     const s = fit * mockScale;
@@ -1344,12 +1358,12 @@ function drawKeyholderMock() {
     ctx.drawImage(mockImg, -dw / 2, -dh / 2, dw, dh);
     ctx.restore();
     ctx.globalCompositeOperation = "source-over";
-    // ステッチ（本体のズレに沿う）
+    // ステッチ
     ctx.save();
     ctx.strokeStyle = "#8a4b2a";
     ctx.lineWidth = 6;
     ctx.setLineDash([16, 11]);
-    mockTracePath(ctx, MOCK_STITCH, MOCK_RADII);
+    mockTracePath(ctx, stitch, MOCK_RADII);
     ctx.stroke();
     ctx.restore();
     // 金具タブ（黄）とホック
@@ -1358,16 +1372,18 @@ function drawKeyholderMock() {
     ctx.strokeStyle = "#d9a90f";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(MOCK_W / 2 - 72, -6, 144, 196, 18);
+    if (!mockLandscape) ctx.roundRect(MOCK_W / 2 - 72, -6, 144, 196, 18);
+    else ctx.roundRect(-6, MOCK_W / 2 - 72, 196, 144, 18);
     ctx.fill();
     ctx.stroke();
-    const snapGrad = ctx.createRadialGradient(MOCK_W / 2 - 8, 138, 4, MOCK_W / 2, 146, 32);
+    const sc = mockLandscape ? [146, MOCK_W / 2] : [MOCK_W / 2, 146];
+    const snapGrad = ctx.createRadialGradient(sc[0] - 8, sc[1] - 8, 4, sc[0], sc[1], 32);
     snapGrad.addColorStop(0, "#e8e4da");
     snapGrad.addColorStop(0.6, "#a9a294");
     snapGrad.addColorStop(1, "#6f6a5e");
     ctx.fillStyle = snapGrad;
     ctx.beginPath();
-    ctx.arc(MOCK_W / 2, 146, 29, 0, Math.PI * 2);
+    ctx.arc(sc[0], sc[1], 29, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 }
@@ -1383,6 +1399,7 @@ function openKeyholderMock(srcDataUrl, label) {
     closeKeyholderMock();
     mockLabel = label || "";
     mockScale = 1; mockDX = 0; mockDY = 30; mockAngle = 0;
+    mockLandscape = false;
     const img = new Image();
     img.onload = () => {
         mockImg = img;
@@ -1395,8 +1412,12 @@ function openKeyholderMock(srcDataUrl, label) {
                 '<h3 class="font-black text-slate-800">キーホルダー仕上がりイメージ' + (mockLabel ? '（' + mockLabel + '）' : '') + '</h3>' +
                 '<button id="mockCloseBtn" class="text-slate-400 text-2xl leading-none px-2">×</button>' +
             '</div>' +
+            '<div class="flex gap-2">' +
+                '<button id="mockTateBtn" class="flex-1 py-2 rounded-xl font-bold text-sm bg-blue-600 text-white">縦</button>' +
+                '<button id="mockYokoBtn" class="flex-1 py-2 rounded-xl font-bold text-sm bg-slate-100 text-slate-500">横</button>' +
+            '</div>' +
             '<div class="flex items-center justify-center bg-slate-100 rounded-2xl p-2">' +
-                '<canvas id="mockCanvas" style="max-width:78%;max-height:52vh;width:auto;height:auto;touch-action:none;cursor:grab;"></canvas>' +
+                '<canvas id="mockCanvas" style="max-width:88%;max-height:52vh;width:auto;height:auto;touch-action:none;cursor:grab;"></canvas>' +
             '</div>' +
             '<p class="text-[11px] text-slate-400">絵は指でドラッグして動かせます。タブとホックの下には彫刻できません。</p>' +
             '<div>' +
@@ -1413,15 +1434,25 @@ function openKeyholderMock(srcDataUrl, label) {
             '</div>' +
         '</div>';
         document.body.appendChild(modal);
+        const setOrient = (land) => {
+            mockLandscape = land;
+            mockScale = 1; mockDX = 0; mockDY = land ? 0 : 30; mockAngle = 0;
+            document.getElementById("mockSizeSlider").value = 100;
+            document.getElementById("mockRotSlider").value = 0;
+            const t = document.getElementById("mockTateBtn");
+            const y = document.getElementById("mockYokoBtn");
+            t.className = "flex-1 py-2 rounded-xl font-bold text-sm " + (!land ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500");
+            y.className = "flex-1 py-2 rounded-xl font-bold text-sm " + (land ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500");
+            const pc2 = document.getElementById("mockCanvas");
+            pc2.style.maxWidth = land ? "96%" : "88%";
+            drawKeyholderMock();
+        };
+        document.getElementById("mockTateBtn").addEventListener("click", () => setOrient(false));
+        document.getElementById("mockYokoBtn").addEventListener("click", () => setOrient(true));
         drawKeyholderMock();
         document.getElementById("mockSizeSlider").addEventListener("input", (e) => { mockScale = (parseInt(e.target.value, 10) || 100) / 100; drawKeyholderMock(); });
         document.getElementById("mockRotSlider").addEventListener("input", (e) => { mockAngle = parseInt(e.target.value, 10) || 0; drawKeyholderMock(); });
-        document.getElementById("mockResetBtn").addEventListener("click", () => {
-            mockScale = 1; mockDX = 0; mockDY = 30; mockAngle = 0;
-            document.getElementById("mockSizeSlider").value = 100;
-            document.getElementById("mockRotSlider").value = 0;
-            drawKeyholderMock();
-        });
+        document.getElementById("mockResetBtn").addEventListener("click", () => setOrient(mockLandscape));
         document.getElementById("mockCloseBtn").addEventListener("click", closeKeyholderMock);
         modal.addEventListener("click", (e) => { if (e.target === modal) closeKeyholderMock(); });
         document.getElementById("mockSaveBtn").addEventListener("click", (e) => {
@@ -1434,7 +1465,7 @@ function openKeyholderMock(srcDataUrl, label) {
         pc.addEventListener("pointermove", (e) => {
             if (!dragging) return;
             const rect = pc.getBoundingClientRect();
-            const fx = MOCK_W / rect.width, fy = MOCK_H / rect.height;
+            const fx = pc.width / rect.width, fy = pc.height / rect.height;
             mockDX += (e.clientX - lastX) * fx;
             mockDY += (e.clientY - lastY) * fy;
             lastX = e.clientX; lastY = e.clientY;
