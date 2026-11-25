@@ -1007,115 +1007,72 @@ convertBtn.addEventListener('click', async () => {
     previewSection.classList.remove('flex');
     loadingSection.classList.remove('hidden');
     loadingSection.classList.add('flex');
-    loadingText.textContent = "デフォルメとリアルを生成中...";
+    loadingText.textContent = "4パターンを生成中...";
     resultsSection.classList.add('hidden');
 
-    card1.classList.remove('opacity-60');
-    resultImg1.classList.add('hidden');
-    resultPlaceholder1.classList.remove('hidden');
-    downloadBtn1.classList.add('hidden');
-
-    card2.classList.remove('opacity-60');
-    resultImg2.classList.add('hidden');
-    resultPlaceholder2.classList.add('hidden');
-    card2Waiting.classList.add('hidden');
-    downloadBtn2.classList.add('hidden');
-
-    card3.classList.add('opacity-60');
-    resultImg3.classList.add('hidden');
-    resultPlaceholder3.classList.add('hidden');
-    card3Waiting.classList.remove('hidden');
-    card3Waiting.textContent = "リアル完了後に生成可能になります";
-    downloadBtn3.classList.add('hidden');
-
-    card4.classList.add('opacity-60');
-    resultImg4.classList.add('hidden');
-    resultPlaceholder4.classList.add('hidden');
-    card4Waiting.classList.remove('hidden');
-    card4Waiting.textContent = "リアル完了後に生成可能になります";
-    downloadBtn4.classList.add('hidden');
+    const cards = [
+        { card: card1, img: resultImg1, ph: resultPlaceholder1, wait: null, btn: downloadBtn1, set: (v) => { currentImgData1 = v; } },
+        { card: card2, img: resultImg2, ph: resultPlaceholder2, wait: card2Waiting, btn: downloadBtn2, set: (v) => { currentImgData2 = v; } },
+        { card: card3, img: resultImg3, ph: resultPlaceholder3, wait: card3Waiting, btn: downloadBtn3, set: (v) => { currentImgData3 = v; } },
+        { card: card4, img: resultImg4, ph: resultPlaceholder4, wait: card4Waiting, btn: downloadBtn4, set: (v) => { currentImgData4 = v; } }
+    ];
+    cards.forEach(c => {
+        c.card.classList.remove('opacity-60');
+        c.img.classList.add('hidden');
+        c.ph.classList.remove('hidden');
+        if (c.wait) c.wait.classList.add('hidden');
+        c.btn.classList.add('hidden');
+    });
 
     generateBothContainer.classList.add('hidden');
     viewAllBtn.classList.add('hidden');
     viewAllTopBtn.classList.add('hidden');
 
-    try {
-        const [imgData1, imgData2] = await Promise.all([
-            generateWithGemini(uploadedBase64Data, uploadedMimeType, variation1),
-            generateWithGemini(uploadedBase64Data, uploadedMimeType, variation2)
-        ]);
+    const results = await Promise.allSettled([
+        generateWithGemini(uploadedBase64Data, uploadedMimeType, variation1),
+        generateWithGemini(uploadedBase64Data, uploadedMimeType, variation2),
+        generateWithGemini(uploadedBase64Data, uploadedMimeType, variation3),
+        generateWithGemini(uploadedBase64Data, uploadedMimeType, variation4)
+    ]);
 
-        currentImgData1 = imgData1;
-        resultImg1.src = currentImgData1;
-        resultPlaceholder1.classList.add('hidden');
-        resultImg1.classList.remove('hidden');
-        downloadBtn1.classList.remove('hidden');
+    let okCount = 0;
+    results.forEach((r, i) => {
+        const c = cards[i];
+        if (r.status === 'fulfilled') {
+            okCount++;
+            c.set(r.value);
+            c.img.src = r.value;
+            c.ph.classList.add('hidden');
+            c.img.classList.remove('hidden');
+            c.btn.classList.remove('hidden');
+        } else {
+            console.error(r.reason);
+            c.ph.classList.add('hidden');
+            if (c.wait) {
+                c.wait.textContent = "生成に失敗しました";
+                c.wait.classList.remove('hidden');
+            }
+            c.card.classList.add('opacity-60');
+        }
+    });
 
-        currentImgData2 = imgData2;
-        resultImg2.src = currentImgData2;
-        resultPlaceholder2.classList.add('hidden');
-        resultImg2.classList.remove('hidden');
-        downloadBtn2.classList.remove('hidden');
+    loadingSection.classList.add('hidden');
+    loadingSection.classList.remove('flex');
 
-        generateBothContainer.classList.remove('hidden');
-        card3Waiting.classList.add('hidden');
-        card4Waiting.classList.add('hidden');
-
-        viewAllBtn.classList.remove('hidden');
-        viewAllTopBtn.classList.remove('hidden');
-
-        loadingSection.classList.add('hidden');
-        loadingSection.classList.remove('flex');
-        resultsSection.classList.remove('hidden');
-        resultsSection.classList.add('flex');
-
-    } catch (error) {
-        console.error(error);
-        showError("画像変換中にエラーが発生しました。(" + error.message + ")");
-        loadingSection.classList.add('hidden');
-        loadingSection.classList.remove('flex');
+    if (okCount === 0) {
+        showError("画像変換中にエラーが発生しました。もう一度お試しください。");
         previewSection.classList.remove('hidden');
         previewSection.classList.add('flex');
+        return;
     }
-});
-
-generateBothBtn.addEventListener('click', async () => {
-    if (!uploadedBase64Data) return;
-    hideError();
-
-    generateBothContainer.classList.add('hidden');
-
-    card3.classList.remove('opacity-60');
-    resultPlaceholder3.classList.remove('hidden');
-
-    card4.classList.remove('opacity-60');
-    resultPlaceholder4.classList.remove('hidden');
-
-    try {
-        const [imgData3, imgData4] = await Promise.all([
-            generateWithGemini(uploadedBase64Data, uploadedMimeType, variation3),
-            generateWithGemini(uploadedBase64Data, uploadedMimeType, variation4)
-        ]);
-
-        currentImgData3 = imgData3;
-        resultImg3.src = currentImgData3;
-        resultPlaceholder3.classList.add('hidden');
-        resultImg3.classList.remove('hidden');
-        downloadBtn3.classList.remove('hidden');
-
-        currentImgData4 = imgData4;
-        resultImg4.src = currentImgData4;
-        resultPlaceholder4.classList.add('hidden');
-        resultImg4.classList.remove('hidden');
-        downloadBtn4.classList.remove('hidden');
-
-    } catch (error) {
-        console.error(error);
-        showError("漫画・線画の生成中にエラーが発生しました。(" + error.message + ")");
-        resultPlaceholder3.classList.add('hidden');
-        resultPlaceholder4.classList.add('hidden');
-        generateBothContainer.classList.remove('hidden');
+    if (okCount < 4) {
+        showError("一部のパターンの生成に失敗しました。もう一度変換すると再生成できます。");
     }
+
+    viewAllBtn.classList.remove('hidden');
+    viewAllTopBtn.classList.remove('hidden');
+    resultsSection.classList.remove('hidden');
+    resultsSection.classList.add('flex');
 });
 
 resetBtn.addEventListener('click', () => {
