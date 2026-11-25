@@ -1856,6 +1856,292 @@ function openBackText() {
     b.addEventListener("click", openBackText);
 })();
 
+// ===== ナンバープレート作成（地名はトレース画像、番号は入力） =====
+let platePlaceName = "";
+let platePlaceImg = null; // HTMLImageElement
+const plateImgCache = {};
+let plateState = { cls: "", hira: "", num: "", numFont: "", alphaFont: "", hiraFont: "", numScale: 100, placeScale: 100, frame: false };
+
+function placeDbOpen() {
+    return new Promise((res, rej) => {
+        const r = indexedDB.open("lineart-places", 1);
+        r.onupgradeneeded = () => { r.result.createObjectStore("places", { keyPath: "name" }); };
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+    });
+}
+async function placeStoreSave(name, dataUrl) {
+    try {
+        const db = await placeDbOpen();
+        db.transaction("places", "readwrite").objectStore("places").put({ name: name, dataUrl: dataUrl });
+    } catch (e) {}
+}
+async function placeStoreAll() {
+    try {
+        const db = await placeDbOpen();
+        return await new Promise((res) => {
+            const out = [];
+            const rq = db.transaction("places").objectStore("places").openCursor();
+            rq.onsuccess = () => { const cur = rq.result; if (cur) { out.push(cur.value); cur.continue(); } else res(out); };
+            rq.onerror = () => res(out);
+        });
+    } catch (e) { return []; }
+}
+function loadPlaceImage(name, dataUrl) {
+    return new Promise((res) => {
+        if (plateImgCache[name]) { res(plateImgCache[name]); return; }
+        const img = new Image();
+        img.onload = () => { plateImgCache[name] = img; res(img); };
+        img.onerror = () => res(null);
+        img.src = dataUrl;
+    });
+}
+
+// 一連番号の自動整形：4桁→12-34、3桁→・353、2桁→・・53（・や-が打ってあればそのまま）
+function formatPlateNumber(raw) {
+    const s = (raw || "").trim();
+    if (s === "") return "";
+    if (/[・\-\s]/.test(s)) return s.replace(/\s/g, "");
+    const d = s.replace(/[^0-9]/g, "");
+    if (d.length === 4) return d.slice(0, 2) + "-" + d.slice(2);
+    if (d.length === 3) return "・" + d;
+    if (d.length === 2) return "・・" + d;
+    if (d.length === 1) return "・・・" + d;
+    return d;
+}
+function plateFontStack(main, sub) {
+    const parts = [];
+    if (main) parts.push('"' + main + '"');
+    if (sub && sub !== main) parts.push('"' + sub + '"');
+    parts.push("sans-serif");
+    return parts.join(", ");
+}
+
+function drawPlate(forSave) {
+    const pc = document.getElementById("plateCanvas");
+    if (!pc) return;
+    const W = 1600, H = 800;
+    pc.width = W; pc.height = H;
+    const ctx = pc.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, W, H);
+    // プレート枠
+    if (plateState.frame || !forSave) {
+        ctx.strokeStyle = plateState.frame ? "#000000" : "#cbd5e1";
+        ctx.lineWidth = plateState.frame ? 10 : 4;
+        ctx.beginPath();
+        ctx.roundRect(14, 14, W - 28, H - 28, 36);
+        ctx.stroke();
+    }
+    ctx.fillStyle = "#000000";
+    ctx.textBaseline = "middle";
+    const stack = plateFontStack(plateState.numFont, plateState.alphaFont);
+    // 地名画像（上段左）
+    const topY = 205;
+    let x = 70;
+    if (platePlaceImg) {
+        const ph = 150 * (plateState.placeScale / 100);
+        const pw = ph * (platePlaceImg.naturalWidth / platePlaceImg.naturalHeight);
+        ctx.drawImage(platePlaceImg, x, topY - ph / 2, pw, ph);
+        x += pw + 36;
+    }
+    // 分類番号（上段、地名の右）
+    if (plateState.cls.trim() !== "") {
+        ctx.font = '150px ' + stack;
+        ctx.textAlign = "left";
+        ctx.fillText(plateState.cls.trim(), x, topY + 8);
+    }
+    // ひらがな（下段左）
+    const botY = 520;
+    if (plateState.hira.trim() !== "") {
+        ctx.font = '170px ' + plateFontStack(plateState.hiraFont, plateState.alphaFont);
+        ctx.textAlign = "left";
+        ctx.fillText(plateState.hira.trim(), 110, botY + 10);
+    }
+    // 一連番号（下段右、等間隔セル描画）
+    const numStr = formatPlateNumber(plateState.num);
+    if (numStr !== "") {
+        const px = 300 * (plateState.numScale / 100);
+        ctx.font = px + 'px ' + stack;
+        const cells = Array.from(numStr).map(ch => ({ ch: ch, w: (ch === "-") ? px * 0.36 : px * 0.62 }));
+        const totalW = cells.reduce((a, c) => a + c.w, 0);
+        let cxp = W - 70 - totalW;
+        ctx.textAlign = "center";
+        cells.forEach(c => {
+            ctx.fillText(c.ch, cxp + c.w / 2, botY + px * 0.04);
+            cxp += c.w;
+        });
+        const pv = document.getElementById("plateNumPreview");
+        if (pv) pv.textContent = "表示：" + numStr;
+    } else {
+        const pv = document.getElementById("plateNumPreview");
+        if (pv) pv.textContent = "";
+    }
+}
+
+function plateFontOptions(selected, allowEmptyLabel) {
+    if (BACK_FONTS.length === 0) return '<option value="">フォント未読込</option>';
+    let html = '<option value="">' + allowEmptyLabel + '</option>';
+    html += BACK_FONTS.map(f => '<option value="' + f.id + '"' + (f.id === selected ? ' selected' : '') + '>' + f.label + '</option>').join("");
+    return html;
+}
+
+function closePlate() {
+    const m = document.getElementById("plateModal");
+    if (m) m.remove();
+}
+
+function openPlate() {
+    closePlate();
+    const modal = document.createElement("div");
+    modal.id = "plateModal";
+    modal.className = "fixed inset-0 z-[87] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4";
+    modal.innerHTML =
+    '<div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 space-y-3 max-h-[94vh] overflow-y-auto">' +
+        '<div class="flex items-center justify-between">' +
+            '<h3 class="font-black text-slate-800">ナンバープレート作成</h3>' +
+            '<button id="plateCloseBtn" class="text-slate-400 text-2xl leading-none px-2">×</button>' +
+        '</div>' +
+        '<div class="bg-slate-100 rounded-2xl p-2">' +
+            '<canvas id="plateCanvas" style="width:100%;height:auto;display:block;"></canvas>' +
+        '</div>' +
+        '<div class="flex gap-2">' +
+            '<select id="platePlaceSel" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-2 py-2 text-sm font-bold text-slate-600"><option value="">地名を選ぶ</option></select>' +
+            '<button id="plateLoadPlaceBtn" class="px-3 py-2 rounded-xl border-2 border-amber-500 text-amber-600 font-bold text-xs">地名画像を読む</button>' +
+            '<input id="platePlaceFile" type="file" accept="image/*" multiple class="hidden">' +
+        '</div>' +
+        '<div class="flex items-center gap-2">' +
+            '<span class="text-[11px] font-bold text-slate-400">地名の大きさ</span>' +
+            '<input id="platePlaceScale" type="range" min="50" max="200" step="5" value="100" class="flex-1">' +
+        '</div>' +
+        '<div class="flex gap-2">' +
+            '<input id="plateCls" type="text" placeholder="分類番号（例 300 / 58A）" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700">' +
+            '<input id="plateHira" type="text" placeholder="ひらがな" class="w-24 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700">' +
+        '</div>' +
+        '<div class="flex gap-2 items-center">' +
+            '<input id="plateNum" type="text" inputmode="numeric" placeholder="一連番号（例 3253 / 53）" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700">' +
+            '<span id="plateNumPreview" class="text-xs font-bold text-blue-600"></span>' +
+        '</div>' +
+        '<div class="flex items-center gap-2">' +
+            '<span class="text-[11px] font-bold text-slate-400">番号の大きさ</span>' +
+            '<input id="plateNumScale" type="range" min="50" max="160" step="5" value="100" class="flex-1">' +
+        '</div>' +
+        '<div class="space-y-1 border-t border-slate-100 pt-2">' +
+            '<div class="flex items-center gap-2"><span class="text-[11px] font-bold text-slate-400 w-24">数字フォント</span><select id="plateNumFont" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-600"></select></div>' +
+            '<div class="flex items-center gap-2"><span class="text-[11px] font-bold text-slate-400 w-24">英字・記号用</span><select id="plateAlphaFont" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-600"></select></div>' +
+            '<div class="flex items-center gap-2"><span class="text-[11px] font-bold text-slate-400 w-24">ひらがな用</span><select id="plateHiraFont" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-600"></select></div>' +
+            '<p class="text-[11px] text-slate-400">数字フォントに無い字（英字・ー・）は「英字・記号用」のフォントで自動で補います。フォントの読み込みは裏面テキストの画面からもできます。</p>' +
+        '</div>' +
+        '<div class="flex gap-2 pt-1">' +
+            '<button id="plateFrameBtn" class="px-3 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-500 text-sm">枠：なし</button>' +
+            '<button id="plateSaveBtn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">ナンバー画像を保存</button>' +
+        '</div>' +
+    '</div>';
+    document.body.appendChild(modal);
+
+    const redraw = () => drawPlate(false);
+    const refreshFontSelects = () => {
+        const nf = document.getElementById("plateNumFont");
+        const af = document.getElementById("plateAlphaFont");
+        const hf = document.getElementById("plateHiraFont");
+        if (!plateState.numFont && BACK_FONTS.length > 0) plateState.numFont = BACK_FONTS[0].id;
+        if (nf) nf.innerHTML = plateFontOptions(plateState.numFont, "指定なし");
+        if (af) af.innerHTML = plateFontOptions(plateState.alphaFont, "指定なし");
+        if (hf) hf.innerHTML = plateFontOptions(plateState.hiraFont, "指定なし");
+    };
+    const refreshPlaceSelect = async () => {
+        const list = await placeStoreAll();
+        const sel = document.getElementById("platePlaceSel");
+        if (!sel) return;
+        sel.innerHTML = '<option value="">地名を選ぶ</option>' + list.map(p => '<option value="' + p.name.replace(/"/g, '&quot;') + '"' + (p.name === platePlaceName ? ' selected' : '') + '>' + p.name + '</option>').join("");
+        sel._placeList = list;
+    };
+    document.getElementById("plateCloseBtn").addEventListener("click", closePlate);
+    modal.addEventListener("click", (e) => { if (e.target === modal) closePlate(); });
+    document.getElementById("platePlaceSel").addEventListener("change", async (e) => {
+        platePlaceName = e.target.value;
+        platePlaceImg = null;
+        if (platePlaceName) {
+            const list = e.target._placeList || await placeStoreAll();
+            const rec = list.find(p => p.name === platePlaceName);
+            if (rec) platePlaceImg = await loadPlaceImage(rec.name, rec.dataUrl);
+        }
+        redraw();
+    });
+    document.getElementById("plateLoadPlaceBtn").addEventListener("click", () => document.getElementById("platePlaceFile").click());
+    document.getElementById("platePlaceFile").addEventListener("change", async (e) => {
+        const files = Array.from(e.target.files || []);
+        let lastName = "";
+        for (const file of files) {
+            const dataUrl = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => res(null); r.readAsDataURL(file); });
+            if (!dataUrl) continue;
+            const name = file.name.replace(/\.[^.]+$/, "");
+            await placeStoreSave(name, dataUrl);
+            plateImgCache[name] = null;
+            delete plateImgCache[name];
+            lastName = name;
+        }
+        await refreshPlaceSelect();
+        if (lastName) {
+            platePlaceName = lastName;
+            const sel = document.getElementById("platePlaceSel");
+            if (sel) { sel.value = lastName; sel.dispatchEvent(new Event("change")); }
+        }
+        e.target.value = "";
+    });
+    document.getElementById("platePlaceScale").addEventListener("input", (e) => { plateState.placeScale = parseInt(e.target.value, 10) || 100; redraw(); });
+    document.getElementById("plateCls").addEventListener("input", (e) => { plateState.cls = e.target.value; redraw(); });
+    document.getElementById("plateHira").addEventListener("input", (e) => { plateState.hira = e.target.value; redraw(); });
+    document.getElementById("plateNum").addEventListener("input", (e) => { plateState.num = e.target.value; redraw(); });
+    document.getElementById("plateNumScale").addEventListener("input", (e) => { plateState.numScale = parseInt(e.target.value, 10) || 100; redraw(); });
+    document.getElementById("plateNumFont").addEventListener("change", (e) => { plateState.numFont = e.target.value; redraw(); });
+    document.getElementById("plateAlphaFont").addEventListener("change", (e) => { plateState.alphaFont = e.target.value; redraw(); });
+    document.getElementById("plateHiraFont").addEventListener("change", (e) => { plateState.hiraFont = e.target.value; redraw(); });
+    document.getElementById("plateFrameBtn").addEventListener("click", (e) => {
+        plateState.frame = !plateState.frame;
+        e.target.textContent = plateState.frame ? "枠：あり" : "枠：なし";
+        redraw();
+    });
+    document.getElementById("plateSaveBtn").addEventListener("click", (e) => {
+        drawPlate(true);
+        const pc = document.getElementById("plateCanvas");
+        triggerDownload(e, pc.toDataURL("image/png"), "number_plate.png");
+        drawPlate(false);
+    });
+
+    // 保存済みフォントと地名を復元
+    fontStoreAll().then(async (list) => {
+        for (const f of list) { try { await registerBackFont(f.name, f.buf); } catch (e) {} }
+        refreshFontSelects();
+        redraw();
+    });
+    refreshPlaceSelect().then(async () => {
+        if (platePlaceName) {
+            const list = await placeStoreAll();
+            const rec = list.find(p => p.name === platePlaceName);
+            if (rec) { platePlaceImg = await loadPlaceImage(rec.name, rec.dataUrl); redraw(); }
+        }
+    });
+    refreshFontSelects();
+    redraw();
+}
+
+// メイン画面に「ナンバープレート」入口ボタンを追加（裏面ボタンの次）
+(function addPlateButton() {
+    if (!uploadSection || !uploadSection.parentNode) return;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = "ナンバープレートを作る";
+    b.className = "w-full py-3 mt-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-colors shadow-sm";
+    const anchor = uploadSection.nextSibling; // 裏面テキストボタン
+    if (anchor && anchor.parentNode === uploadSection.parentNode) {
+        anchor.parentNode.insertBefore(b, anchor.nextSibling);
+    } else {
+        uploadSection.parentNode.insertBefore(b, uploadSection.nextSibling);
+    }
+    b.addEventListener("click", openPlate);
+})();
+
 </script>
 </body>
 </html>
