@@ -1530,9 +1530,9 @@ function openKeyholderMock(srcDataUrl, label) {
 // ===== 裏面テキスト（お客さんが入力→フォント読込→行ごとに位置・大きさ→画像で保存） =====
 let BACK_FONTS = [];
 let backLines = [
-    { text: "", font: "", size: 100, dx: 0, dy: 0 },
-    { text: "", font: "", size: 100, dx: 0, dy: 0 },
-    { text: "", font: "", size: 100, dx: 0, dy: 0 }
+    { text: "", font: "", size: 100, dx: 0, dy: 0, bold: false },
+    { text: "", font: "", size: 100, dx: 0, dy: 0, bold: false },
+    { text: "", font: "", size: 100, dx: 0, dy: 0, bold: false }
 ];
 let backLandscape = false;
 let backActiveLine = 0;
@@ -1593,10 +1593,10 @@ function backLayout(ctx, frameW, frameH) {
         let px = 100;
         ctx.font = px + 'px "' + fam + '", serif';
         const w = ctx.measureText(l.text).width || 1;
-        px = px * (frameW * 0.88) / w;
+        px = px * (frameW * 0.88) / (l.bold ? w * 1.07 : w);
         px = Math.min(px, frameH * 0.30);
         px = px * (l.size / 100);
-        items.push({ idx: idx, text: l.text, font: fam, px: px, h: px * 1.32, dx: l.dx, dy: l.dy });
+        items.push({ idx: idx, text: l.text, font: fam, px: px, h: px * 1.32, dx: l.dx, dy: l.dy, bold: !!l.bold });
     });
     const total = items.reduce((a, b) => a + b.h, 0);
     let y = frameH / 2 - total / 2;
@@ -1633,7 +1633,15 @@ function drawBackText(showGuide) {
     ctx.textBaseline = "middle";
     items.forEach(it => {
         ctx.font = it.px + 'px "' + it.font + '", serif';
-        ctx.fillText(it.text, inner.x + inner.w / 2 + it.dx, inner.y + it.cy + it.dy);
+        const tx = inner.x + inner.w / 2 + it.dx;
+        const ty = inner.y + it.cy + it.dy;
+        if (it.bold) {
+            ctx.lineWidth = it.px * 0.05;
+            ctx.strokeStyle = "#4a2f1d";
+            ctx.lineJoin = "round";
+            ctx.strokeText(it.text, tx, ty);
+        }
+        ctx.fillText(it.text, tx, ty);
     });
     ctx.restore();
     ctx.globalCompositeOperation = "source-over";
@@ -1709,6 +1717,7 @@ function openBackText() {
                 '<input id="backSize' + i + '" type="range" min="40" max="200" step="5" value="' + l.size + '" class="flex-1">' +
                 '<span id="backSizeVal' + i + '" class="text-[11px] font-bold text-blue-600 w-10 text-right">' + l.size + '%</span>' +
                 '<button id="backPosReset' + i + '" class="text-[11px] font-bold text-slate-400 border border-slate-200 rounded-lg px-2 py-1">位置リセット</button>' +
+                '<button id="backBold' + i + '" class="text-[11px] font-bold rounded-lg px-2 py-1 ' + (l.bold ? 'bg-slate-700 text-white' : 'text-slate-400 border border-slate-200') + '">太字</button>' +
             '</div>' +
         '</div>';
     });
@@ -1778,6 +1787,11 @@ function openBackText() {
             redraw();
         });
         document.getElementById("backPosReset" + i).addEventListener("click", () => { backLines[i].dx = 0; backLines[i].dy = 0; redraw(); });
+        document.getElementById("backBold" + i).addEventListener("click", (e) => {
+            backLines[i].bold = !backLines[i].bold;
+            e.target.className = "text-[11px] font-bold rounded-lg px-2 py-1 " + (backLines[i].bold ? "bg-slate-700 text-white" : "text-slate-400 border border-slate-200");
+            redraw();
+        });
     });
     document.getElementById("backLoadFontBtn").addEventListener("click", () => document.getElementById("backFontFile").click());
     document.getElementById("backFontFile").addEventListener("change", async (e) => {
@@ -1818,7 +1832,15 @@ function openBackText() {
         const items = backLayout(cx2, inner.w, inner.h);
         items.forEach(it => {
             cx2.font = (it.px * scale) + 'px "' + it.font + '", serif';
-            cx2.fillText(it.text, (inner.w / 2 + it.dx) * scale, (it.cy + it.dy) * scale);
+            const ex = (inner.w / 2 + it.dx) * scale;
+            const ey = (it.cy + it.dy) * scale;
+            if (it.bold) {
+                cx2.lineWidth = it.px * scale * 0.05;
+                cx2.strokeStyle = "#000000";
+                cx2.lineJoin = "round";
+                cx2.strokeText(it.text, ex, ey);
+            }
+            cx2.fillText(it.text, ex, ey);
         });
         triggerDownload(e, c.toDataURL("image/png"), "back_text.png");
     });
