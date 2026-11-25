@@ -1280,6 +1280,184 @@ function openRotateTool(srcDataUrl, filename, applyMode) {
     }
 })();
 
+// ===== キーホルダー仕上がりイメージ（ステッチ枠に収まるか確認・お客さん提示用） =====
+let mockImg = null;
+let mockScale = 1, mockDX = 0, mockDY = 0, mockAngle = 0;
+let mockLabel = "";
+const MOCK_W = 640, MOCK_H = 1200, MOCK_INSET = 46;
+
+function mockInnerRect() {
+    return { x: MOCK_INSET, y: MOCK_INSET, w: MOCK_W - MOCK_INSET * 2, h: MOCK_H - MOCK_INSET * 2 };
+}
+
+function drawKeyholderMock() {
+    const pc = document.getElementById("mockCanvas");
+    if (!pc || !mockImg) return;
+    pc.width = MOCK_W; pc.height = MOCK_H;
+    const ctx = pc.getContext("2d");
+    // 革本体
+    const grad = ctx.createLinearGradient(0, 0, MOCK_W, MOCK_H);
+    grad.addColorStop(0, "#e3cdaa");
+    grad.addColorStop(0.5, "#dbc39e");
+    grad.addColorStop(1, "#d3ba92");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(0, 0, MOCK_W, MOCK_H, 40);
+    ctx.fill();
+    ctx.strokeStyle = "#b99b6e";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    const inner = mockInnerRect();
+    // 彫刻（ステッチ枠内にクリップ、multiplyで革に焼いた質感）
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(inner.x, inner.y, inner.w, inner.h, 26);
+    ctx.clip();
+    const fit = Math.min(inner.w / mockImg.naturalWidth, inner.h / mockImg.naturalHeight);
+    const s = fit * mockScale;
+    const dw = mockImg.naturalWidth * s, dh = mockImg.naturalHeight * s;
+    const cx = inner.x + inner.w / 2 + mockDX;
+    const cy = inner.y + inner.h / 2 + mockDY;
+    ctx.globalCompositeOperation = "multiply";
+    ctx.translate(cx, cy);
+    ctx.rotate(mockAngle * Math.PI / 180);
+    ctx.drawImage(mockImg, -dw / 2, -dh / 2, dw, dh);
+    ctx.restore();
+    ctx.globalCompositeOperation = "source-over";
+    // ステッチ
+    ctx.save();
+    ctx.strokeStyle = "#8a4b2a";
+    ctx.lineWidth = 6;
+    ctx.setLineDash([16, 11]);
+    ctx.beginPath();
+    ctx.roundRect(inner.x, inner.y, inner.w, inner.h, 26);
+    ctx.stroke();
+    ctx.restore();
+    // 金具タブ（黄）とホック
+    ctx.save();
+    ctx.fillStyle = "#f0c41c";
+    ctx.strokeStyle = "#d9a90f";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(MOCK_W / 2 - 58, -6, 116, 168, 18);
+    ctx.fill();
+    ctx.stroke();
+    const snapGrad = ctx.createRadialGradient(MOCK_W / 2 - 8, 96, 4, MOCK_W / 2, 104, 30);
+    snapGrad.addColorStop(0, "#e8e4da");
+    snapGrad.addColorStop(0.6, "#a9a294");
+    snapGrad.addColorStop(1, "#6f6a5e");
+    ctx.fillStyle = snapGrad;
+    ctx.beginPath();
+    ctx.arc(MOCK_W / 2, 104, 27, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function closeKeyholderMock() {
+    const m = document.getElementById("mockModal");
+    if (m) m.remove();
+    mockImg = null;
+}
+
+function openKeyholderMock(srcDataUrl, label) {
+    if (!srcDataUrl) return;
+    closeKeyholderMock();
+    mockLabel = label || "";
+    mockScale = 1; mockDX = 0; mockDY = 30; mockAngle = 0;
+    const img = new Image();
+    img.onload = () => {
+        mockImg = img;
+        const modal = document.createElement("div");
+        modal.id = "mockModal";
+        modal.className = "fixed inset-0 z-[85] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4";
+        modal.innerHTML =
+        '<div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 space-y-4 max-h-[94vh] overflow-y-auto">' +
+            '<div class="flex items-center justify-between">' +
+                '<h3 class="font-black text-slate-800">キーホルダー仕上がりイメージ' + (mockLabel ? '（' + mockLabel + '）' : '') + '</h3>' +
+                '<button id="mockCloseBtn" class="text-slate-400 text-2xl leading-none px-2">×</button>' +
+            '</div>' +
+            '<div class="flex items-center justify-center bg-slate-100 rounded-2xl p-2">' +
+                '<canvas id="mockCanvas" style="max-width:78%;max-height:52vh;width:auto;height:auto;touch-action:none;cursor:grab;"></canvas>' +
+            '</div>' +
+            '<p class="text-[11px] text-slate-400">絵は指でドラッグして動かせます。タブとホックの下には彫刻できません。</p>' +
+            '<div>' +
+                '<label class="text-xs font-bold text-slate-400">大きさ</label>' +
+                '<input id="mockSizeSlider" type="range" min="30" max="250" step="1" value="100" class="w-full">' +
+            '</div>' +
+            '<div>' +
+                '<label class="text-xs font-bold text-slate-400">回転（-30°〜+30°）</label>' +
+                '<input id="mockRotSlider" type="range" min="-30" max="30" step="1" value="0" class="w-full">' +
+            '</div>' +
+            '<div class="flex gap-2">' +
+                '<button id="mockResetBtn" class="px-3 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-500 text-sm">リセット</button>' +
+                '<button id="mockSaveBtn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">イメージを保存</button>' +
+            '</div>' +
+        '</div>';
+        document.body.appendChild(modal);
+        drawKeyholderMock();
+        document.getElementById("mockSizeSlider").addEventListener("input", (e) => { mockScale = (parseInt(e.target.value, 10) || 100) / 100; drawKeyholderMock(); });
+        document.getElementById("mockRotSlider").addEventListener("input", (e) => { mockAngle = parseInt(e.target.value, 10) || 0; drawKeyholderMock(); });
+        document.getElementById("mockResetBtn").addEventListener("click", () => {
+            mockScale = 1; mockDX = 0; mockDY = 30; mockAngle = 0;
+            document.getElementById("mockSizeSlider").value = 100;
+            document.getElementById("mockRotSlider").value = 0;
+            drawKeyholderMock();
+        });
+        document.getElementById("mockCloseBtn").addEventListener("click", closeKeyholderMock);
+        modal.addEventListener("click", (e) => { if (e.target === modal) closeKeyholderMock(); });
+        document.getElementById("mockSaveBtn").addEventListener("click", (e) => {
+            const pc = document.getElementById("mockCanvas");
+            triggerDownload(e, pc.toDataURL("image/png"), "keyholder_image.png");
+        });
+        const pc = document.getElementById("mockCanvas");
+        let dragging = false, lastX = 0, lastY = 0;
+        pc.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; pc.setPointerCapture(e.pointerId); });
+        pc.addEventListener("pointermove", (e) => {
+            if (!dragging) return;
+            const rect = pc.getBoundingClientRect();
+            const fx = MOCK_W / rect.width, fy = MOCK_H / rect.height;
+            mockDX += (e.clientX - lastX) * fx;
+            mockDY += (e.clientY - lastY) * fy;
+            lastX = e.clientX; lastY = e.clientY;
+            drawKeyholderMock();
+        });
+        pc.addEventListener("pointerup", () => { dragging = false; });
+        pc.addEventListener("pointercancel", () => { dragging = false; });
+    };
+    img.src = srcDataUrl;
+}
+
+// 結果カードに「キーホルダーで見る」ボタンを追加
+(function addMockButtons() {
+    const pairs = [
+        [downloadBtn1, () => currentImgData1, "デフォルメ"],
+        [downloadBtn2, () => currentImgData2, "リアル"],
+        [downloadBtn3, () => currentImgData3, "漫画"],
+        [downloadBtn4, () => currentImgData4, "線画"]
+    ];
+    pairs.forEach(([dlBtn, getData, label]) => {
+        if (!dlBtn) return;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = "キーホルダーで見る";
+        b.className = "w-full py-2 mt-2 bg-amber-600 hover:bg-amber-700 text-white text-xs md:text-sm font-semibold rounded-lg transition-colors shadow-sm flex justify-center items-center";
+        if (dlBtn.classList.contains("hidden")) b.classList.add("hidden");
+        const rotBtn = dlBtn.nextSibling;
+        if (rotBtn && rotBtn.tagName === "BUTTON") {
+            rotBtn.parentNode.insertBefore(b, rotBtn.nextSibling);
+            new MutationObserver(() => {
+                b.classList.toggle("hidden", rotBtn.classList.contains("hidden"));
+            }).observe(rotBtn, { attributes: true, attributeFilter: ["class"] });
+        } else {
+            dlBtn.parentNode.insertBefore(b, dlBtn.nextSibling);
+            new MutationObserver(() => {
+                b.classList.toggle("hidden", dlBtn.classList.contains("hidden"));
+            }).observe(dlBtn, { attributes: true, attributeFilter: ["class"] });
+        }
+        b.addEventListener("click", () => openKeyholderMock(getData(), label));
+    });
+})();
+
 </script>
 </body>
 </html>
