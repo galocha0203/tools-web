@@ -1137,6 +1137,149 @@ resetBtn.addEventListener('click', () => {
     window.scrollTo(0, 0);
 });
 
+// ===== 画像回転ツール（アプリ内で回転して保存：LaserPeckerへそのまま入れる用） =====
+let rotateSrcImg = null;
+let rotateQuarter = 0;
+let rotateFine = 0;
+let rotateFilename = "rotated.png";
+let rotateApplyMode = null;
+
+function rotateTotalAngle() {
+    let a = (rotateQuarter * 90 + rotateFine) % 360;
+    if (a > 180) a -= 360;
+    if (a < -180) a += 360;
+    return a;
+}
+
+function buildRotatedCanvas(img, angleDeg) {
+    const rad = angleDeg * Math.PI / 180;
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+    const nw = Math.max(1, Math.round(w * cos + h * sin));
+    const nh = Math.max(1, Math.round(w * sin + h * cos));
+    const c = document.createElement("canvas");
+    c.width = nw; c.height = nh;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, nw, nh);
+    ctx.translate(nw / 2, nh / 2);
+    ctx.rotate(rad);
+    ctx.drawImage(img, -w / 2, -h / 2);
+    return c;
+}
+
+function closeRotateTool() {
+    const m = document.getElementById("rotateModal");
+    if (m) m.remove();
+    rotateSrcImg = null;
+    rotateApplyMode = null;
+}
+
+function openRotateTool(srcDataUrl, filename, applyMode) {
+    if (!srcDataUrl) return;
+    closeRotateTool();
+    rotateFilename = filename || "rotated.png";
+    rotateApplyMode = applyMode || null;
+    rotateQuarter = 0;
+    rotateFine = 0;
+    const img = new Image();
+    img.onload = () => {
+        rotateSrcImg = img;
+        const modal = document.createElement("div");
+        modal.id = "rotateModal";
+        modal.className = "fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4";
+        modal.innerHTML =
+        '<div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 space-y-4 max-h-[92vh] overflow-y-auto">' +
+            '<div class="flex items-center justify-between">' +
+                '<h3 class="font-black text-slate-800">画像を回転</h3>' +
+                '<button id="rotateCloseBtn" class="text-slate-400 text-2xl leading-none px-2">×</button>' +
+            '</div>' +
+            '<div class="bg-slate-100 rounded-2xl p-2 flex items-center justify-center">' +
+                '<canvas id="rotateCanvas" style="max-width:100%;max-height:42vh;width:auto;height:auto;"></canvas>' +
+            '</div>' +
+            '<div class="flex items-center justify-center gap-3">' +
+                '<button id="rotateQLeft" class="px-3 py-2 rounded-xl border-2 border-slate-200 font-bold text-slate-600 text-sm">⟲ 90°</button>' +
+                '<span id="rotateAngleLabel" class="font-black text-slate-800 w-16 text-center">0°</span>' +
+                '<button id="rotateQRight" class="px-3 py-2 rounded-xl border-2 border-slate-200 font-bold text-slate-600 text-sm">90° ⟳</button>' +
+            '</div>' +
+            '<div>' +
+                '<label class="text-xs font-bold text-slate-400">微調整（-45°〜+45°）</label>' +
+                '<input id="rotateSlider" type="range" min="-45" max="45" step="1" value="0" class="w-full">' +
+            '</div>' +
+            '<div class="flex gap-2">' +
+                '<button id="rotateResetBtn" class="px-3 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-500 text-sm">リセット</button>' +
+                '<button id="rotateDownloadBtn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">回転してダウンロード</button>' +
+            '</div>' +
+            (rotateApplyMode === "preview" ? '<button id="rotateApplyBtn" class="w-full bg-slate-900 text-white font-bold py-3 rounded-xl text-sm">この角度で決定（元の画像に反映）</button>' : '') +
+            '<p class="text-[11px] text-slate-400 leading-relaxed">白い背景で広げて回転するので、端が切れたり周りの線が入ったりしません。そのままLaserPeckerに入れられます。</p>' +
+        '</div>';
+        document.body.appendChild(modal);
+        const draw = () => {
+            const angle = rotateTotalAngle();
+            document.getElementById("rotateAngleLabel").textContent = angle + "°";
+            const src = buildRotatedCanvas(rotateSrcImg, angle);
+            const pc = document.getElementById("rotateCanvas");
+            pc.width = src.width; pc.height = src.height;
+            pc.getContext("2d").drawImage(src, 0, 0);
+        };
+        document.getElementById("rotateSlider").addEventListener("input", (e) => { rotateFine = parseInt(e.target.value, 10) || 0; draw(); });
+        document.getElementById("rotateQLeft").addEventListener("click", () => { rotateQuarter = (rotateQuarter + 3) % 4; draw(); });
+        document.getElementById("rotateQRight").addEventListener("click", () => { rotateQuarter = (rotateQuarter + 1) % 4; draw(); });
+        document.getElementById("rotateResetBtn").addEventListener("click", () => { rotateQuarter = 0; rotateFine = 0; document.getElementById("rotateSlider").value = 0; draw(); });
+        document.getElementById("rotateCloseBtn").addEventListener("click", closeRotateTool);
+        modal.addEventListener("click", (e) => { if (e.target === modal) closeRotateTool(); });
+        document.getElementById("rotateDownloadBtn").addEventListener("click", (e) => {
+            const out = buildRotatedCanvas(rotateSrcImg, rotateTotalAngle()).toDataURL("image/png");
+            triggerDownload(e, out, rotateFilename);
+        });
+        const applyBtn = document.getElementById("rotateApplyBtn");
+        if (applyBtn) {
+            applyBtn.addEventListener("click", () => {
+                const out = buildRotatedCanvas(rotateSrcImg, rotateTotalAngle()).toDataURL("image/png");
+                rawDataUrlGlobal = out;
+                uploadedMimeType = "image/png";
+                uploadedBase64Data = out.split(",")[1];
+                imagePreview.src = out;
+                originalImgDisplay.src = out;
+                closeRotateTool();
+            });
+        }
+        draw();
+    };
+    img.src = srcDataUrl;
+}
+
+// 結果カード（4パターン）とプレビューに回転ボタンを追加
+(function addRotateButtons() {
+    const pairs = [
+        [downloadBtn1, () => currentImgData1, "line_art_pattern1_rot.png"],
+        [downloadBtn2, () => currentImgData2, "line_art_pattern2_rot.png"],
+        [downloadBtn3, () => currentImgData3, "line_art_pattern3_rot.png"],
+        [downloadBtn4, () => currentImgData4, "line_art_pattern4_rot.png"]
+    ];
+    pairs.forEach(([dlBtn, getData, fname]) => {
+        if (!dlBtn) return;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = "↻ 回転";
+        b.className = "w-full py-2 mt-2 bg-white border-2 border-slate-300 hover:border-slate-400 text-slate-600 text-xs md:text-sm font-semibold rounded-lg transition-colors shadow-sm flex justify-center items-center";
+        if (dlBtn.classList.contains("hidden")) b.classList.add("hidden");
+        dlBtn.parentNode.insertBefore(b, dlBtn.nextSibling);
+        new MutationObserver(() => {
+            b.classList.toggle("hidden", dlBtn.classList.contains("hidden"));
+        }).observe(dlBtn, { attributes: true, attributeFilter: ["class"] });
+        b.addEventListener("click", () => openRotateTool(getData(), fname, null));
+    });
+    if (imagePreview && imagePreview.parentNode) {
+        const pb = document.createElement("button");
+        pb.type = "button";
+        pb.textContent = "↻ 画像を回転";
+        pb.className = "w-full py-2 mt-3 bg-white border-2 border-slate-300 hover:border-slate-400 text-slate-600 text-xs md:text-sm font-semibold rounded-lg transition-colors shadow-sm";
+        imagePreview.parentNode.insertBefore(pb, imagePreview.nextSibling);
+        pb.addEventListener("click", () => openRotateTool(rawDataUrlGlobal, "rotated.png", "preview"));
+    }
+})();
+
 </script>
 </body>
 </html>
