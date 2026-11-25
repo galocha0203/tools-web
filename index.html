@@ -24,6 +24,7 @@
         @keyframes loader-dots3 { 0% { transform: scale(1); } 100% { transform: scale(0); } }
         @keyframes loader-dots2 { 0% { transform: translate(0, 0); } 100% { transform: translate(24px, 0); } }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Seaweed+Script&family=Dancing+Script:wght@500;700&family=Pacifico&family=Caveat:wght@600&family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@500;700&family=Klee+One:wght@600&family=Yuji+Syuku&family=Kaisei+Decol:wght@500;700&display=swap" rel="stylesheet">
 </head>
 <body class="text-slate-800 antialiased min-h-screen flex flex-col">
     <header class="bg-white shadow-sm py-3 sticky top-0 z-20">
@@ -1291,8 +1292,9 @@ const MOCK_BODY = [[26, 8], [598, 24], [628, 1178], [10, 1154]];
 const MOCK_STITCH = [[74, 56], [556, 74], [584, 1128], [58, 1104]];
 const MOCK_RADII = [22, 16, 26, 18];
 
-function mockPts(pts) {
-    if (!mockLandscape) return pts;
+function mockPts(pts, land) {
+    const L = (typeof land === "boolean") ? land : mockLandscape;
+    if (!L) return pts;
     return pts.map(([x, y]) => [y, MOCK_W - x]); // 90°反時計回り＝タブが左に来る横向き
 }
 function mockDims() {
@@ -1524,6 +1526,270 @@ function openKeyholderMock(srcDataUrl, label) {
         }
         b.addEventListener("click", () => openKeyholderMock(getData(), label));
     });
+})();
+
+// ===== 裏面テキスト（お客さんが入力→フォント・大きさ調整→画像で保存） =====
+const BACK_FONTS = [
+    { id: "Seaweed Script", label: "筆記体 Seaweed" },
+    { id: "Dancing Script", label: "筆記体 太め" },
+    { id: "Pacifico", label: "筆記体 ポップ" },
+    { id: "Caveat", label: "手書き風" },
+    { id: "Shippori Mincho", label: "明朝" },
+    { id: "Zen Kaku Gothic New", label: "ゴシック" },
+    { id: "Klee One", label: "手書き（日本語）" },
+    { id: "Yuji Syuku", label: "筆文字" },
+    { id: "Kaisei Decol", label: "装飾明朝" },
+    { id: "serif", label: "明朝（標準）" },
+    { id: "sans-serif", label: "ゴシック（標準）" }
+];
+let backLines = [
+    { text: "", font: "Seaweed Script", size: 100 },
+    { text: "", font: "Seaweed Script", size: 100 },
+    { text: "", font: "Seaweed Script", size: 100 }
+];
+let backLandscape = false, backDX = 0, backDY = 0;
+
+function backInnerRect() {
+    const pts = mockPts(MOCK_STITCH, backLandscape);
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+}
+
+// 行ごとのフォントサイズ(px)とY位置を計算（frameW/frameH基準）
+function backLayout(ctx, frameW, frameH) {
+    const lines = backLines.filter(l => l.text.trim() !== "");
+    const items = lines.map(l => {
+        let px = 100;
+        ctx.font = px + 'px "' + l.font + '", serif';
+        const w = ctx.measureText(l.text).width || 1;
+        px = px * (frameW * 0.88) / w;              // 枠幅にフィット
+        px = Math.min(px, frameH * 0.30);            // 大きすぎ防止
+        px = px * (l.size / 100);                    // 行ごとの倍率
+        return { text: l.text, font: l.font, px: px, h: px * 1.32 };
+    });
+    const total = items.reduce((a, b) => a + b.h, 0);
+    let y = frameH / 2 - total / 2;
+    items.forEach(it => { it.cy = y + it.h / 2; y += it.h; });
+    return items;
+}
+
+function drawBackText() {
+    const pc = document.getElementById("backCanvas");
+    if (!pc) return;
+    const dims = backLandscape ? { w: MOCK_H, h: MOCK_W } : { w: MOCK_W, h: MOCK_H };
+    pc.width = dims.w; pc.height = dims.h;
+    const ctx = pc.getContext("2d");
+    const body = mockPts(MOCK_BODY, backLandscape);
+    const stitch = mockPts(MOCK_STITCH, backLandscape);
+    const grad = ctx.createLinearGradient(0, 0, dims.w, dims.h);
+    grad.addColorStop(0, "#e3cdaa");
+    grad.addColorStop(0.5, "#dbc39e");
+    grad.addColorStop(1, "#d3ba92");
+    ctx.fillStyle = grad;
+    mockTracePath(ctx, body, MOCK_RADII);
+    ctx.fill();
+    ctx.strokeStyle = "#b99b6e";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    const inner = backInnerRect();
+    ctx.save();
+    mockTracePath(ctx, stitch, MOCK_RADII);
+    ctx.clip();
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = "#4a2f1d";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const items = backLayout(ctx, inner.w, inner.h);
+    items.forEach(it => {
+        ctx.font = it.px + 'px "' + it.font + '", serif';
+        ctx.fillText(it.text, inner.x + inner.w / 2 + backDX, inner.y + it.cy + backDY);
+    });
+    ctx.restore();
+    ctx.globalCompositeOperation = "source-over";
+    ctx.save();
+    ctx.strokeStyle = "#8a4b2a";
+    ctx.lineWidth = 6;
+    ctx.setLineDash([16, 11]);
+    mockTracePath(ctx, stitch, MOCK_RADII);
+    ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = "#f0c41c";
+    ctx.strokeStyle = "#d9a90f";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    if (!backLandscape) ctx.roundRect(MOCK_W / 2 - 72, -6, 144, 196, 18);
+    else ctx.roundRect(-6, MOCK_W / 2 - 72, 196, 144, 18);
+    ctx.fill();
+    ctx.stroke();
+    const sc = backLandscape ? [146, MOCK_W / 2] : [MOCK_W / 2, 146];
+    const snapGrad = ctx.createRadialGradient(sc[0] - 8, sc[1] - 8, 4, sc[0], sc[1], 32);
+    snapGrad.addColorStop(0, "#e8e4da");
+    snapGrad.addColorStop(0.6, "#a9a294");
+    snapGrad.addColorStop(1, "#6f6a5e");
+    ctx.fillStyle = snapGrad;
+    ctx.beginPath();
+    ctx.arc(sc[0], sc[1], 29, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function backFontOptions(selected) {
+    return BACK_FONTS.map(f => '<option value="' + f.id + '"' + (f.id === selected ? ' selected' : '') + '>' + f.label + '</option>').join("");
+}
+
+function closeBackText() {
+    const m = document.getElementById("backModal");
+    if (m) m.remove();
+}
+
+function openBackText() {
+    closeBackText();
+    const modal = document.createElement("div");
+    modal.id = "backModal";
+    modal.className = "fixed inset-0 z-[86] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4";
+    let rowsHtml = "";
+    backLines.forEach((l, i) => {
+        rowsHtml +=
+        '<div class="space-y-1 border-t border-slate-100 pt-2">' +
+            '<div class="flex gap-2">' +
+                '<input id="backText' + i + '" type="text" value="' + l.text.replace(/"/g, '&quot;') + '" placeholder="' + (i + 1) + '行目（空欄なら彫りません）" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700">' +
+                '<select id="backFont' + i + '" class="w-32 border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-600">' + backFontOptions(l.font) + '</select>' +
+            '</div>' +
+            '<div class="flex items-center gap-2">' +
+                '<span class="text-[11px] font-bold text-slate-400">大きさ</span>' +
+                '<input id="backSize' + i + '" type="range" min="40" max="200" step="5" value="' + l.size + '" class="flex-1">' +
+                '<span id="backSizeVal' + i + '" class="text-[11px] font-bold text-blue-600 w-10 text-right">' + l.size + '%</span>' +
+            '</div>' +
+        '</div>';
+    });
+    modal.innerHTML =
+    '<div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-5 space-y-3 max-h-[94vh] overflow-y-auto">' +
+        '<div class="flex items-center justify-between">' +
+            '<h3 class="font-black text-slate-800">裏面テキスト</h3>' +
+            '<button id="backCloseBtn" class="text-slate-400 text-2xl leading-none px-2">×</button>' +
+        '</div>' +
+        '<div class="flex gap-2">' +
+            '<button id="backTateBtn" class="flex-1 py-2 rounded-xl font-bold text-sm bg-blue-600 text-white">縦</button>' +
+            '<button id="backYokoBtn" class="flex-1 py-2 rounded-xl font-bold text-sm bg-slate-100 text-slate-500">横</button>' +
+        '</div>' +
+        '<div class="flex items-center justify-center bg-slate-100 rounded-2xl p-2">' +
+            '<canvas id="backCanvas" style="max-width:88%;max-height:38vh;width:auto;height:auto;touch-action:none;cursor:grab;"></canvas>' +
+        '</div>' +
+        '<p class="text-[11px] text-slate-400">文字ブロックは指でドラッグして位置を動かせます。お客さんに入力してもらうと読み間違いが防げます。</p>' +
+        rowsHtml +
+        '<button id="backLoadFontBtn" class="w-full py-2 rounded-xl border-2 border-slate-200 font-bold text-slate-500 text-xs">自分のフォントを読み込む（TTF/OTF）</button>' +
+        '<input id="backFontFile" type="file" accept=".ttf,.otf,.woff,.woff2" class="hidden">' +
+        '<div class="flex gap-2 pt-1">' +
+            '<button id="backSaveMockBtn" class="flex-1 py-3 rounded-xl border-2 border-blue-600 text-blue-600 font-bold text-sm">確認イメージを保存</button>' +
+            '<button id="backSaveArtBtn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">彫刻用に保存</button>' +
+        '</div>' +
+        '<p class="text-[11px] text-slate-400">「彫刻用に保存」は文字だけを黒×白で保存します。そのままLaserPeckerに取り込んでください。</p>' +
+    '</div>';
+    document.body.appendChild(modal);
+
+    const redraw = () => drawBackText();
+    const setOrient = (land) => {
+        backLandscape = land; backDX = 0; backDY = 0;
+        const t = document.getElementById("backTateBtn");
+        const y = document.getElementById("backYokoBtn");
+        t.className = "flex-1 py-2 rounded-xl font-bold text-sm " + (!land ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500");
+        y.className = "flex-1 py-2 rounded-xl font-bold text-sm " + (land ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500");
+        const pc2 = document.getElementById("backCanvas");
+        pc2.style.maxWidth = land ? "96%" : "88%";
+        redraw();
+    };
+    document.getElementById("backTateBtn").addEventListener("click", () => setOrient(false));
+    document.getElementById("backYokoBtn").addEventListener("click", () => setOrient(true));
+    document.getElementById("backCloseBtn").addEventListener("click", closeBackText);
+    modal.addEventListener("click", (e) => { if (e.target === modal) closeBackText(); });
+    backLines.forEach((l, i) => {
+        document.getElementById("backText" + i).addEventListener("input", (e) => { backLines[i].text = e.target.value; redraw(); });
+        document.getElementById("backFont" + i).addEventListener("change", (e) => {
+            backLines[i].font = e.target.value;
+            if (document.fonts && document.fonts.load) document.fonts.load('32px "' + e.target.value + '"', backLines[i].text || "あ").then(redraw).catch(() => {});
+            redraw();
+        });
+        document.getElementById("backSize" + i).addEventListener("input", (e) => {
+            backLines[i].size = parseInt(e.target.value, 10) || 100;
+            document.getElementById("backSizeVal" + i).textContent = backLines[i].size + "%";
+            redraw();
+        });
+    });
+    document.getElementById("backLoadFontBtn").addEventListener("click", () => document.getElementById("backFontFile").click());
+    document.getElementById("backFontFile").addEventListener("change", async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+            const buf = await file.arrayBuffer();
+            const name = file.name.replace(/\.(ttf|otf|woff2?)$/i, "");
+            const face = new FontFace(name, buf);
+            await face.load();
+            document.fonts.add(face);
+            BACK_FONTS.push({ id: name, label: name + "（読込）" });
+            backLines.forEach((l, i) => {
+                const sel = document.getElementById("backFont" + i);
+                if (sel) sel.innerHTML = backFontOptions(backLines[i].font);
+            });
+            redraw();
+            alert("フォント「" + name + "」を読み込みました。各行のフォント一覧から選べます。");
+        } catch (err) {
+            alert("フォントを読み込めませんでした。TTF/OTFファイルを選んでください。");
+        }
+        e.target.value = "";
+    });
+    document.getElementById("backSaveMockBtn").addEventListener("click", (e) => {
+        const pc = document.getElementById("backCanvas");
+        triggerDownload(e, pc.toDataURL("image/png"), "keyholder_back_image.png");
+    });
+    document.getElementById("backSaveArtBtn").addEventListener("click", (e) => {
+        const inner = backInnerRect();
+        const scale = 2;
+        const c = document.createElement("canvas");
+        c.width = Math.round(inner.w * scale); c.height = Math.round(inner.h * scale);
+        const cx2 = c.getContext("2d");
+        cx2.fillStyle = "#ffffff";
+        cx2.fillRect(0, 0, c.width, c.height);
+        cx2.fillStyle = "#000000";
+        cx2.textAlign = "center";
+        cx2.textBaseline = "middle";
+        const items = backLayout(cx2, inner.w, inner.h);
+        items.forEach(it => {
+            cx2.font = (it.px * scale) + 'px "' + it.font + '", serif';
+            cx2.fillText(it.text, (inner.w / 2 + backDX) * scale, (it.cy + backDY) * scale);
+        });
+        triggerDownload(e, c.toDataURL("image/png"), "back_text.png");
+    });
+    const pc = document.getElementById("backCanvas");
+    let dragging = false, lastX = 0, lastY = 0;
+    pc.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; pc.setPointerCapture(e.pointerId); });
+    pc.addEventListener("pointermove", (e) => {
+        if (!dragging) return;
+        const rect = pc.getBoundingClientRect();
+        backDX += (e.clientX - lastX) * (pc.width / rect.width);
+        backDY += (e.clientY - lastY) * (pc.height / rect.height);
+        lastX = e.clientX; lastY = e.clientY;
+        redraw();
+    });
+    pc.addEventListener("pointerup", () => { dragging = false; });
+    pc.addEventListener("pointercancel", () => { dragging = false; });
+
+    if (document.fonts && document.fonts.load) {
+        Promise.all(BACK_FONTS.map(f => document.fonts.load('32px "' + f.id + '"', "あAg1").catch(() => {}))).then(redraw).catch(() => {});
+        if (document.fonts.ready) document.fonts.ready.then(redraw).catch(() => {});
+    }
+    redraw();
+}
+
+// メイン画面に「裏面テキスト」入口ボタンを追加
+(function addBackTextButton() {
+    if (!uploadSection || !uploadSection.parentNode) return;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = "裏面テキストを作る（名前・日付）";
+    b.className = "w-full py-3 mt-3 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl transition-colors shadow-sm";
+    uploadSection.parentNode.insertBefore(b, uploadSection.nextSibling);
+    b.addEventListener("click", openBackText);
 })();
 
 </script>
