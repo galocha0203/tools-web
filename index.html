@@ -6,7 +6,7 @@
     <title>線画グラフィック</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="線画メーカー">
+    <meta name="apple-mobile-web-app-title" content="線画グラフィック">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#0f172a">
     <link id="appleTouchIcon" rel="apple-touch-icon" href="">
@@ -309,7 +309,7 @@ function setStoredApiKey(val) {
         iconCanvas.width = 192;
         iconCanvas.height = 192;
         const ctx = iconCanvas.getContext('2d');
-        ctx.fillStyle = '#0f172a';
+        ctx.fillStyle = '#2563eb';
         ctx.beginPath();
         ctx.roundRect(0, 0, 192, 192, 42);
         ctx.fill();
@@ -336,7 +336,7 @@ function setStoredApiKey(val) {
 
         const manifestObj = {
             name: "線画グラフィック",
-            short_name: "線画メーカー",
+            short_name: "線画グラフィック",
             display: "standalone",
             background_color: "#f8fafc",
             theme_color: "#0f172a",
