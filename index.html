@@ -1421,17 +1421,19 @@ function openKeyholderMock(srcDataUrl, label) {
             '</div>' +
             '<p class="text-[11px] text-slate-400">絵は指でドラッグして動かせます。タブとホックの下には彫刻できません。</p>' +
             '<div>' +
-                '<label class="text-xs font-bold text-slate-400">大きさ</label>' +
+                '<label class="text-xs font-bold text-slate-400">大きさ <span id="mockSizeVal" class="text-blue-600">100%</span></label>' +
                 '<input id="mockSizeSlider" type="range" min="30" max="250" step="1" value="100" class="w-full">' +
             '</div>' +
             '<div>' +
-                '<label class="text-xs font-bold text-slate-400">回転（-30°〜+30°）</label>' +
+                '<label class="text-xs font-bold text-slate-400">回転（-30°〜+30°） <span id="mockRotVal" class="text-blue-600">0°</span></label>' +
                 '<input id="mockRotSlider" type="range" min="-30" max="30" step="1" value="0" class="w-full">' +
             '</div>' +
             '<div class="flex gap-2">' +
                 '<button id="mockResetBtn" class="px-3 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-500 text-sm">リセット</button>' +
                 '<button id="mockSaveBtn" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">イメージを保存</button>' +
             '</div>' +
+            '<button id="mockSaveArtBtn" class="w-full py-3 rounded-xl border-2 border-amber-500 text-amber-600 font-bold text-sm">回転した線画を保存（彫刻用）</button>' +
+            '<p class="text-[11px] text-slate-400">「回転した線画を保存」は、表示中の角度をかけた線画だけを白背景で保存します。そのままLaserPeckerに取り込めます。</p>' +
         '</div>';
         document.body.appendChild(modal);
         const setOrient = (land) => {
@@ -1439,6 +1441,8 @@ function openKeyholderMock(srcDataUrl, label) {
             mockScale = 1; mockDX = 0; mockDY = land ? 0 : 30; mockAngle = 0;
             document.getElementById("mockSizeSlider").value = 100;
             document.getElementById("mockRotSlider").value = 0;
+            document.getElementById("mockSizeVal").textContent = "100%";
+            document.getElementById("mockRotVal").textContent = "0°";
             const t = document.getElementById("mockTateBtn");
             const y = document.getElementById("mockYokoBtn");
             t.className = "flex-1 py-2 rounded-xl font-bold text-sm " + (!land ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500");
@@ -1450,14 +1454,28 @@ function openKeyholderMock(srcDataUrl, label) {
         document.getElementById("mockTateBtn").addEventListener("click", () => setOrient(false));
         document.getElementById("mockYokoBtn").addEventListener("click", () => setOrient(true));
         drawKeyholderMock();
-        document.getElementById("mockSizeSlider").addEventListener("input", (e) => { mockScale = (parseInt(e.target.value, 10) || 100) / 100; drawKeyholderMock(); });
-        document.getElementById("mockRotSlider").addEventListener("input", (e) => { mockAngle = parseInt(e.target.value, 10) || 0; drawKeyholderMock(); });
+        document.getElementById("mockSizeSlider").addEventListener("input", (e) => { mockScale = (parseInt(e.target.value, 10) || 100) / 100; document.getElementById("mockSizeVal").textContent = Math.round(mockScale * 100) + "%"; drawKeyholderMock(); });
+        document.getElementById("mockRotSlider").addEventListener("input", (e) => { mockAngle = parseInt(e.target.value, 10) || 0; document.getElementById("mockRotVal").textContent = mockAngle + "°"; drawKeyholderMock(); });
         document.getElementById("mockResetBtn").addEventListener("click", () => setOrient(mockLandscape));
         document.getElementById("mockCloseBtn").addEventListener("click", closeKeyholderMock);
         modal.addEventListener("click", (e) => { if (e.target === modal) closeKeyholderMock(); });
         document.getElementById("mockSaveBtn").addEventListener("click", (e) => {
             const pc = document.getElementById("mockCanvas");
             triggerDownload(e, pc.toDataURL("image/png"), "keyholder_image.png");
+        });
+        document.getElementById("mockSaveArtBtn").addEventListener("click", (e) => {
+            if (!mockImg) return;
+            const w = mockImg.naturalWidth, h = mockImg.naturalHeight;
+            const diag = Math.ceil(Math.hypot(w, h));
+            const c = document.createElement("canvas");
+            c.width = diag; c.height = diag;
+            const cx2 = c.getContext("2d");
+            cx2.fillStyle = "#ffffff";
+            cx2.fillRect(0, 0, diag, diag);
+            cx2.translate(diag / 2, diag / 2);
+            cx2.rotate(mockAngle * Math.PI / 180);
+            cx2.drawImage(mockImg, -w / 2, -h / 2, w, h);
+            triggerDownload(e, c.toDataURL("image/png"), "lineart_rotated.png");
         });
         const pc = document.getElementById("mockCanvas");
         let dragging = false, lastX = 0, lastY = 0;
