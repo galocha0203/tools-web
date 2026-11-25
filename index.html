@@ -1934,6 +1934,13 @@ function plateFontStack(main, sub) {
     return parts.join(", ");
 }
 
+function plateCharFont(ch, px) {
+    // 数字は数字フォント、それ以外（英字・ー・）は英字用フォントで1文字ずつ描く
+    if (/[0-9]/.test(ch) && plateState.numFont) return px + 'px "' + plateState.numFont + '", sans-serif';
+    const lf = (plateState.alphaFont && plateState.alphaFont !== plateState.numFont) ? plateState.alphaFont : "";
+    return px + 'px ' + (lf ? '"' + lf + '", ' : '') + 'sans-serif';
+}
+
 function drawPlate(forSave) {
     const pc = document.getElementById("plateCanvas");
     if (!pc) return;
@@ -1953,45 +1960,74 @@ function drawPlate(forSave) {
     ctx.fillStyle = "#000000";
     ctx.textBaseline = "middle";
     const stack = plateFontStack(plateState.numFont, plateState.alphaFont);
-    // 上段：地名＋分類番号（実物プレートと同じ大きさ・配置で、ひとかたまりを中央に）
+    // 上段：地名＋分類番号（地名画像の高さは隣の数字の字の高さに合わせる）
     const topPx = 235 * (plateState.placeScale / 100);
     const topY = 195;
+    const cls = plateState.cls.trim();
     let clsW = 0;
-    if (plateState.cls.trim() !== "") {
-        ctx.font = topPx + 'px ' + stack;
-        clsW = ctx.measureText(plateState.cls.trim()).width;
+    if (cls !== "") {
+        for (const ch of Array.from(cls)) {
+            ctx.font = plateCharFont(ch, topPx);
+            clsW += ctx.measureText(ch).width;
+        }
+    }
+    let digitGlyphH = topPx * 0.72;
+    ctx.font = topPx + 'px ' + stack;
+    const mTop = ctx.measureText("0");
+    if (mTop.actualBoundingBoxAscent) {
+        const gh = mTop.actualBoundingBoxAscent + (mTop.actualBoundingBoxDescent || 0);
+        if (gh > 10) digitGlyphH = gh;
     }
     let imgW = 0;
-    if (platePlaceImg) imgW = topPx * (platePlaceImg.naturalWidth / platePlaceImg.naturalHeight);
-    const gapTop = (imgW > 0 && clsW > 0) ? 34 : 0;
+    if (platePlaceImg) imgW = digitGlyphH * (platePlaceImg.naturalWidth / platePlaceImg.naturalHeight);
+    const gapTop = (imgW > 0 && clsW > 0) ? 30 : 0;
     let x = Math.max(50, (W - (imgW + gapTop + clsW)) / 2);
     if (platePlaceImg) {
-        ctx.drawImage(platePlaceImg, x, topY - topPx / 2, imgW, topPx);
+        ctx.drawImage(platePlaceImg, x, topY - digitGlyphH / 2, imgW, digitGlyphH);
         x += imgW + gapTop;
     }
-    if (clsW > 0) {
-        ctx.font = topPx + 'px ' + stack;
+    if (cls !== "") {
         ctx.textAlign = "left";
-        ctx.fillText(plateState.cls.trim(), x, topY + topPx * 0.04);
+        let cxp = x;
+        for (const ch of Array.from(cls)) {
+            ctx.font = plateCharFont(ch, topPx);
+            ctx.fillText(ch, cxp, topY + topPx * 0.02);
+            cxp += ctx.measureText(ch).width;
+        }
     }
-    // ひらがな（下段左・小さめ）
+    // ひらがな（下段左・実物比率で字の高さ＝プレートの25%）
     const botY = 545;
     if (plateState.hira.trim() !== "") {
-        ctx.font = '200px ' + plateFontStack(plateState.hiraFont, plateState.alphaFont);
+        const hiraStack = plateFontStack(plateState.hiraFont, (plateState.alphaFont && plateState.alphaFont !== plateState.numFont) ? plateState.alphaFont : "");
+        let hpx = 250;
+        ctx.font = '200px ' + hiraStack;
+        const mh = ctx.measureText("あ");
+        if (mh.actualBoundingBoxAscent) {
+            const rr = (mh.actualBoundingBoxAscent + (mh.actualBoundingBoxDescent || 0)) / 200;
+            if (rr > 0.2) hpx = (0.25 * H) / rr;
+        }
+        ctx.font = hpx + 'px ' + hiraStack;
         ctx.textAlign = "left";
         ctx.fillText(plateState.hira.trim(), 95, botY);
     }
-    // 一連番号（下段右、等間隔セル描画・実物の比率で大きく）
+    // 一連番号（下段右・固定サイズ：数字の字の高さ＝プレート高さの50%、等間隔セル）
     const numStr = formatPlateNumber(plateState.num);
     if (numStr !== "") {
-        const px = 440 * (plateState.numScale / 100);
-        ctx.font = px + 'px ' + stack;
+        ctx.font = '200px ' + stack;
+        const m0 = ctx.measureText("0");
+        let r = 0.72;
+        if (m0.actualBoundingBoxAscent) {
+            const rr = (m0.actualBoundingBoxAscent + (m0.actualBoundingBoxDescent || 0)) / 200;
+            if (rr > 0.2) r = rr;
+        }
+        const px = (0.50 * H) / r;
         const cells = Array.from(numStr).map(ch => ({ ch: ch, w: (ch === "-") ? px * 0.34 : px * 0.58 }));
         const totalW = cells.reduce((a, c) => a + c.w, 0);
         let cxp = W - 45 - totalW;
         ctx.textAlign = "center";
         cells.forEach(c => {
-            ctx.fillText(c.ch, cxp + c.w / 2, botY + px * 0.04);
+            ctx.font = plateCharFont(c.ch, px);
+            ctx.fillText(c.ch, cxp + c.w / 2, botY + px * 0.03);
             cxp += c.w;
         });
         const pv = document.getElementById("plateNumPreview");
@@ -2045,15 +2081,11 @@ function openPlate() {
             '<input id="plateNum" type="text" inputmode="numeric" placeholder="一連番号（例 3253 / 53）" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-700">' +
             '<span id="plateNumPreview" class="text-xs font-bold text-blue-600"></span>' +
         '</div>' +
-        '<div class="flex items-center gap-2">' +
-            '<span class="text-[11px] font-bold text-slate-400">番号の大きさ</span>' +
-            '<input id="plateNumScale" type="range" min="50" max="160" step="5" value="100" class="flex-1">' +
-        '</div>' +
         '<div class="space-y-1 border-t border-slate-100 pt-2">' +
             '<div class="flex items-center gap-2"><span class="text-[11px] font-bold text-slate-400 w-24">数字フォント</span><select id="plateNumFont" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-600"></select></div>' +
             '<div class="flex items-center gap-2"><span class="text-[11px] font-bold text-slate-400 w-24">英字・記号用</span><select id="plateAlphaFont" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-600"></select></div>' +
             '<div class="flex items-center gap-2"><span class="text-[11px] font-bold text-slate-400 w-24">ひらがな用</span><select id="plateHiraFont" class="flex-1 min-w-0 border-2 border-slate-200 rounded-xl px-2 py-2 text-xs font-bold text-slate-600"></select></div>' +
-            '<p class="text-[11px] text-slate-400">数字フォントに無い字（英字・ー・）は「英字・記号用」のフォントで自動で補います。フォントの読み込みは裏面テキストの画面からもできます。</p>' +
+            '<p class="text-[11px] text-slate-400">英字・ー・は「英字・記号用」のフォントで描きます。数字フォントとは別の、英字が入ったフォントを選んでください（同じフォントだと英字が出ません）。フォントの読み込みは裏面テキストの画面からできます。</p>' +
         '</div>' +
         '<div class="flex gap-2 pt-1">' +
             '<button id="plateFrameBtn" class="px-3 py-3 rounded-xl border-2 border-slate-200 font-bold text-slate-500 text-sm">枠：なし</button>' +
@@ -2116,7 +2148,6 @@ function openPlate() {
     document.getElementById("plateCls").addEventListener("input", (e) => { plateState.cls = e.target.value; redraw(); });
     document.getElementById("plateHira").addEventListener("input", (e) => { plateState.hira = e.target.value; redraw(); });
     document.getElementById("plateNum").addEventListener("input", (e) => { plateState.num = e.target.value; redraw(); });
-    document.getElementById("plateNumScale").addEventListener("input", (e) => { plateState.numScale = parseInt(e.target.value, 10) || 100; redraw(); });
     document.getElementById("plateNumFont").addEventListener("change", (e) => { plateState.numFont = e.target.value; redraw(); });
     document.getElementById("plateAlphaFont").addEventListener("change", (e) => { plateState.alphaFont = e.target.value; redraw(); });
     document.getElementById("plateHiraFont").addEventListener("change", (e) => { plateState.hiraFont = e.target.value; redraw(); });
