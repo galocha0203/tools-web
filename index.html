@@ -1286,8 +1286,30 @@ let mockScale = 1, mockDX = 0, mockDY = 0, mockAngle = 0;
 let mockLabel = "";
 const MOCK_W = 640, MOCK_H = 1200, MOCK_INSET = 46;
 
+const MOCK_BODY = [[26, 8], [598, 24], [628, 1178], [10, 1154]];
+const MOCK_STITCH = [[74, 56], [556, 74], [584, 1128], [58, 1104]];
+const MOCK_RADII = [22, 16, 26, 18];
+
+function mockTracePath(ctx, pts, radii) {
+    const n = pts.length;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+        const p = pts[i];
+        const prev = pts[(i + n - 1) % n];
+        const next = pts[(i + 1) % n];
+        const r = radii[i % radii.length];
+        const d1 = Math.hypot(p[0] - prev[0], p[1] - prev[1]) || 1;
+        const d2 = Math.hypot(next[0] - p[0], next[1] - p[1]) || 1;
+        const a = [p[0] - (p[0] - prev[0]) / d1 * r, p[1] - (p[1] - prev[1]) / d1 * r];
+        const b = [p[0] + (next[0] - p[0]) / d2 * r, p[1] + (next[1] - p[1]) / d2 * r];
+        if (i === 0) ctx.moveTo(a[0], a[1]); else ctx.lineTo(a[0], a[1]);
+        ctx.quadraticCurveTo(p[0], p[1], b[0], b[1]);
+    }
+    ctx.closePath();
+}
+
 function mockInnerRect() {
-    return { x: MOCK_INSET, y: MOCK_INSET, w: MOCK_W - MOCK_INSET * 2, h: MOCK_H - MOCK_INSET * 2 };
+    return { x: 74, y: 56, w: 584 - 74, h: 1128 - 56 };
 }
 
 function drawKeyholderMock() {
@@ -1295,23 +1317,21 @@ function drawKeyholderMock() {
     if (!pc || !mockImg) return;
     pc.width = MOCK_W; pc.height = MOCK_H;
     const ctx = pc.getContext("2d");
-    // 革本体
+    // 革本体（実物トレースの少しズレた四角形）
     const grad = ctx.createLinearGradient(0, 0, MOCK_W, MOCK_H);
     grad.addColorStop(0, "#e3cdaa");
     grad.addColorStop(0.5, "#dbc39e");
     grad.addColorStop(1, "#d3ba92");
     ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.roundRect(0, 0, MOCK_W, MOCK_H, 40);
+    mockTracePath(ctx, MOCK_BODY, MOCK_RADII);
     ctx.fill();
     ctx.strokeStyle = "#b99b6e";
     ctx.lineWidth = 4;
     ctx.stroke();
     const inner = mockInnerRect();
-    // 彫刻（ステッチ枠内にクリップ、multiplyで革に焼いた質感）
+    // 彫刻（ステッチ枠の形にクリップ、multiplyで革に焼いた質感）
     ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(inner.x, inner.y, inner.w, inner.h, 26);
+    mockTracePath(ctx, MOCK_STITCH, MOCK_RADII);
     ctx.clip();
     const fit = Math.min(inner.w / mockImg.naturalWidth, inner.h / mockImg.naturalHeight);
     const s = fit * mockScale;
@@ -1324,13 +1344,12 @@ function drawKeyholderMock() {
     ctx.drawImage(mockImg, -dw / 2, -dh / 2, dw, dh);
     ctx.restore();
     ctx.globalCompositeOperation = "source-over";
-    // ステッチ
+    // ステッチ（本体のズレに沿う）
     ctx.save();
     ctx.strokeStyle = "#8a4b2a";
     ctx.lineWidth = 6;
     ctx.setLineDash([16, 11]);
-    ctx.beginPath();
-    ctx.roundRect(inner.x, inner.y, inner.w, inner.h, 26);
+    mockTracePath(ctx, MOCK_STITCH, MOCK_RADII);
     ctx.stroke();
     ctx.restore();
     // 金具タブ（黄）とホック
@@ -1339,16 +1358,16 @@ function drawKeyholderMock() {
     ctx.strokeStyle = "#d9a90f";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(MOCK_W / 2 - 58, -6, 116, 168, 18);
+    ctx.roundRect(MOCK_W / 2 - 72, -6, 144, 196, 18);
     ctx.fill();
     ctx.stroke();
-    const snapGrad = ctx.createRadialGradient(MOCK_W / 2 - 8, 96, 4, MOCK_W / 2, 104, 30);
+    const snapGrad = ctx.createRadialGradient(MOCK_W / 2 - 8, 138, 4, MOCK_W / 2, 146, 32);
     snapGrad.addColorStop(0, "#e8e4da");
     snapGrad.addColorStop(0.6, "#a9a294");
     snapGrad.addColorStop(1, "#6f6a5e");
     ctx.fillStyle = snapGrad;
     ctx.beginPath();
-    ctx.arc(MOCK_W / 2, 104, 27, 0, Math.PI * 2);
+    ctx.arc(MOCK_W / 2, 146, 29, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 }
