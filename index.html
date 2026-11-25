@@ -1291,6 +1291,24 @@ const MOCK_BODY = [[26, 8], [598, 24], [628, 1178], [10, 1154]];
 const MOCK_STITCH = [[74, 56], [556, 74], [584, 1128], [58, 1104]];
 const MOCK_RADII = [22, 16, 26, 18];
 
+// 古いSafari（iOS15以下）には無い roundRect の代替
+if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+        const rad = Math.min((typeof r === "number" ? r : 0), w / 2, h / 2);
+        this.moveTo(x + rad, y);
+        this.lineTo(x + w - rad, y);
+        this.arcTo(x + w, y, x + w, y + rad, rad);
+        this.lineTo(x + w, y + h - rad);
+        this.arcTo(x + w, y + h, x + w - rad, y + h, rad);
+        this.lineTo(x + rad, y + h);
+        this.arcTo(x, y + h, x, y + h - rad, rad);
+        this.lineTo(x, y + rad);
+        this.arcTo(x, y, x + rad, y, rad);
+        this.closePath();
+        return this;
+    };
+}
+
 function mockPts(pts, land) {
     const L = (typeof land === "boolean") ? land : mockLandscape;
     if (!L) return pts;
@@ -1481,6 +1499,13 @@ function openKeyholderMock(srcDataUrl, label) {
         const pc = document.getElementById("mockCanvas");
         let dragging = false, lastX = 0, lastY = 0;
         pc.addEventListener("pointerdown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; pc.setPointerCapture(e.pointerId); });
+        let mockDrawQueued = false;
+        const queueMockDraw = () => {
+            if (mockDrawQueued) return;
+            mockDrawQueued = true;
+            requestAnimationFrame(() => { mockDrawQueued = false; drawKeyholderMock(); });
+        };
+        pc.addEventListener("touchmove", (e) => { e.preventDefault(); }, { passive: false });
         pc.addEventListener("pointermove", (e) => {
             if (!dragging) return;
             const rect = pc.getBoundingClientRect();
@@ -1488,7 +1513,7 @@ function openKeyholderMock(srcDataUrl, label) {
             mockDX += (e.clientX - lastX) * fx;
             mockDY += (e.clientY - lastY) * fy;
             lastX = e.clientX; lastY = e.clientY;
-            drawKeyholderMock();
+            queueMockDraw();
         });
         pc.addEventListener("pointerup", () => { dragging = false; });
         pc.addEventListener("pointercancel", () => { dragging = false; });
