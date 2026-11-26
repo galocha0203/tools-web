@@ -130,13 +130,13 @@
                             ダウンロード
                         </button>
                         <button id="generatePattern3Btn" class="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg shadow transition hidden">
-                            漫画を追加生成
+                            ゆる線画を追加生成
                         </button>
                     </div>
                 </div>
                 <div id="card3" class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col border border-slate-200 opacity-60">
                     <div class="p-2.5 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-                        <span class="font-bold text-slate-700 text-xs md:text-sm">漫画</span>
+                        <span class="font-bold text-slate-700 text-xs md:text-sm">ゆる線画</span>
                     </div>
                     <div class="p-2 flex-grow flex flex-col items-center justify-center bg-slate-100 h-44 md:h-52 relative">
                         <div id="resultPlaceholder3" class="hidden animate-pulse flex flex-col items-center">
@@ -144,7 +144,7 @@
                             <span class="text-xs text-slate-400">生成中...</span>
                         </div>
                         <span id="card3Waiting" class="text-xs text-slate-400 text-center px-4">リアル完了後に生成可能になります</span>
-                        <img id="resultImg3" class="w-full h-full object-contain hidden rounded shadow-sm cursor-pointer hover:opacity-95 transition grayscale" src="" alt="漫画" title="クリックして拡大" />
+                        <img id="resultImg3" class="w-full h-full object-contain hidden rounded shadow-sm cursor-pointer hover:opacity-95 transition grayscale" src="" alt="ゆる線画" title="クリックして拡大" />
                     </div>
                     <div class="p-2.5 flex flex-col gap-2">
                         <button id="downloadBtn3" class="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs md:text-sm font-semibold rounded-lg transition-colors shadow-sm flex justify-center items-center hidden">
@@ -176,7 +176,7 @@
             <div id="generateBothContainer" class="w-full max-w-sm mt-4 hidden">
                 <button id="generateBothBtn" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm shadow-xl transition transform hover:-translate-y-0.5 flex items-center justify-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                    漫画と線画を生成
+                    ゆる線画と線画を生成
                 </button>
             </div>
             <div class="flex flex-wrap justify-center gap-3 mt-6 mb-4">
@@ -493,7 +493,7 @@ function renderViewAllLayout() {
     const generatedList = [
         { src: currentImgData1, label: "デフォルメ" },
         { src: currentImgData2, label: "リアル" },
-        { src: currentImgData3, label: "漫画" },
+        { src: currentImgData3, label: "ゆる線画" },
         { src: currentImgData4, label: "線画" }
     ].filter(item => !!item.src);
 
@@ -982,11 +982,16 @@ const variation2 = `Create Output Pattern 2:
 - Shading & Tone: High contrast, minimalist pure white background. Completely monochrome in grayscale (完全に白黒・グレースケール). For dark elements, hair, fur, or subjects, do NOT use pure black; instead, use soft gray shades and tones so that when laser engraved it does not burn too dark (黒い色は使わずグレーの濃淡で代用し、レーザー彫刻で真っ黒にならないように薄めに仕上げる). For human subjects, prioritize realism in features while keeping shading as soft gray tones. Absolutely NO color.
 - General: Maintain the exact pose and composition of the reference image. Remove all text, empty chairs, background scenery, and unrelated items. Preserve occupied chairs and held items.`;
 
-const variation3 = `Create Output Pattern 3:
-- Style: Convert into the distinctive art style of manga artist Man Gataro (漫画家・漫☆画太郎の画風). Bold, dynamic, exaggerated gag-manga facial expressions and features characteristic of Man Gataro, rendered with fewer lines (線は少なめ) so it remains clean and uncluttered.
-- Color & Fill: Strictly black and white monochrome line art (白黒). NO color, and avoid heavy solid black fills.
-- Background & Text: Completely remove all background elements, replacing with a pure solid white background (#FFFFFF) (背景は完全に消して純白にする). Absolutely NO text, sound effects, or letters.
-- Subject: Maintain the pose, composition, and key items of the subject from the reference image, cropped tightly around the subject.`;
+const variation3 = `Create Output Pattern 3 (Loose "Yuru" Line Illustration for Laser Engraving):
+REDRAW the photo as a simple, cute, loose line illustration - do NOT trace the photo. Imagine drawing a children's coloring page from memory of the scene.
+Hard rules:
+- Draw ONLY the subjects. Background must be completely blank pure white (#FFFFFF): no floor, no walls, no furniture, no horizon lines. Remove all background scenery and all text.
+- Use as FEW lines as possible. Thick, bold, slightly wobbly hand-drawn outer contours; inner details almost zero. Make the outer contour lines bold and thick, while keeping all inner detail lines thin.
+- NO fur lines, NO individual hairs, NO hatching, NO shading, NO gray, NO color. Black lines on white only, no solid fills except tiny eye dots (ベタ塗り禁止).
+- Eyes must be simple round black dots with one small white highlight - never realistic eyes with iris detail. For human faces: dot eyes, nose as one tiny stroke, mouth as one short curve or one simple open shape for a laugh.
+- Faces and bodies slightly rounded and cuter than reality. Simplify every shape: hair and ears = a few flowing curves, clothing folds = almost none, markings = simple outline boundaries only.
+- Absolutely NO text or letters anywhere. Any label or sign must be left blank.
+- The result should look like a charming minimalist Japanese "yuru-illustration", NOT a detailed line tracing. Keep the pose, composition, and key items (glasses, hats, held items, occupied chairs) recognisable.`;
 
 const variation4 = `Create Output Pattern 4 (Laser Engraving Portrait):
 # Laser Engraving Portrait
@@ -1483,7 +1488,7 @@ function openKeyholderMock(srcDataUrl, label) {
     const pairs = [
         [downloadBtn1, () => currentImgData1, "デフォルメ"],
         [downloadBtn2, () => currentImgData2, "リアル"],
-        [downloadBtn3, () => currentImgData3, "漫画"],
+        [downloadBtn3, () => currentImgData3, "ゆる線画"],
         [downloadBtn4, () => currentImgData4, "線画"]
     ];
     pairs.forEach(([dlBtn, getData, label]) => {
