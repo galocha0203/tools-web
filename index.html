@@ -1904,6 +1904,31 @@ async function placeStoreDelete(name) {
     } catch (e) {}
 }
 function isUuidName(n) { return /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-/.test(n || ""); }
+async function readPlaceNameWithAI(dataUrl) {
+    const activeKey = getStoredApiKey() || apiKey;
+    if (!activeKey) return null;
+    const m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || "");
+    if (!m) return null;
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + activeKey;
+    const prompt = "この画像は日本のナンバープレートに使われる地名（運輸支局・自動車検査登録事務所の名称）の文字をトレースしたものです。書かれている地名を読み取り、漢字表記と、その読み（ひらがな）を答えてください。説明は不要です。次のJSONだけを返してください：{\"name\":\"旭川\",\"reading\":\"あさひかわ\"}";
+    try {
+        const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { mimeType: m[1], data: m[2] } }] }] }) });
+        if (!res.ok) return null;
+        const j = await res.json();
+        const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+        let text = "";
+        for (const p of parts) { if (p.text) text += p.text; }
+        const jm = /\{[\s\S]*?\}/.exec(text);
+        if (!jm) return null;
+        const obj = JSON.parse(jm[0]);
+        const name = (obj.name || "").trim();
+        if (!name) return null;
+        let reading = (obj.reading || "").trim();
+        reading = reading.replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60));
+        const first = reading.charAt(0);
+        return (first ? first : "") + name;
+    } catch (e) { return null; }
+}
 async function placeStoreAll() {
     try {
         const db = await placeDbOpen();
@@ -2141,6 +2166,7 @@ function openPlate() {
             '<button id="plateGridBtn" class="flex-1 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs">地名を画像で選ぶ</button>' +
             '<button id="plateRenameBtn" class="flex-1 py-2 rounded-xl border-2 border-slate-200 font-bold text-slate-500 text-xs">選んだ地名の名前を変更</button>' +
         '</div>' +
+        '<button id="plateAutoNameBtn" class="w-full py-2 rounded-xl border-2 border-amber-500 text-amber-600 font-bold text-xs">AIで名前を付ける（記号名の地名すべて・読みの頭文字つき）</button>' +
         '<div class="flex items-center gap-2">' +
             '<span class="text-[11px] font-bold text-slate-400">地名の大きさ</span>' +
             '<input id="platePlaceScale" type="range" min="50" max="200" step="5" value="100" class="flex-1">' +
@@ -2278,6 +2304,43 @@ function openPlate() {
             if (sel) { sel.value = lastName; sel.dispatchEvent(new Event("change")); }
         }
         e.target.value = "";
+    });
+    document.getElementById("plateAutoNameBtn").addEventListener("click", async (e) => {
+        const btn = e.target;
+        const list = await placeStoreAll();
+        const targets = list.filter(p => isUuidName(p.name));
+        if (!targets.length) { alert("記号名の地名はありません"); return; }
+        if (!confirm("記号名の地名 " + targets.length + " 件に、AIで「読みの頭文字＋地名」の名前を付けます。よろしいですか？")) return;
+        btn.disabled = true;
+        const used = new Set(list.filter(p => !isUuidName(p.name)).map(p => p.name));
+        let done = 0, ok = 0, fail = 0;
+        const renamed = {};
+        const queue = targets.slice();
+        const worker = async () => {
+            while (queue.length) {
+                const rec = queue.shift();
+                const nn = await readPlaceNameWithAI(rec.dataUrl);
+                done++;
+                btn.textContent = "AIで読み取り中… " + done + "/" + targets.length;
+                if (nn) {
+                    let cand = nn, k = 2;
+                    while (used.has(cand)) { cand = nn + k; k++; }
+                    used.add(cand);
+                    await placeStoreSave(cand, rec.dataUrl);
+                    await placeStoreDelete(rec.name);
+                    renamed[rec.name] = cand;
+                    ok++;
+                } else { fail++; }
+            }
+        };
+        await Promise.all([worker(), worker(), worker(), worker()]);
+        if (renamed[platePlaceName]) platePlaceName = renamed[platePlaceName];
+        await refreshPlaceSelect();
+        const sel2 = document.getElementById("platePlaceSel");
+        if (sel2 && platePlaceName) { sel2.value = platePlaceName; }
+        btn.disabled = false;
+        btn.textContent = "AIで名前を付ける（記号名の地名すべて・読みの頭文字つき）";
+        alert("名前を付けました：" + ok + "件" + (fail ? "／読めなかった：" + fail + "件（そのまま残っています）" : ""));
     });
     document.getElementById("platePlaceScale").addEventListener("input", (e) => { plateState.placeScale = parseInt(e.target.value, 10) || 100; redraw(); });
     document.getElementById("plateCls").addEventListener("input", (e) => { plateState.cls = e.target.value; redraw(); });
